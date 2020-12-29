@@ -1,14 +1,14 @@
 module ram (
   input            clk,
   input            we,
-  input [9:0]     addr,
+  input [12:0]     addr,
   input [7:0]      din,
   output reg [7:0] dout,
 );
 
   parameter MEM_INIT_FILE = "";
    
-  reg [7:0] ram [0:1023];
+  reg [7:0] ram [0:8191];
 
   initial
     if (MEM_INIT_FILE != "")

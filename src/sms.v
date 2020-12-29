@@ -1,12 +1,11 @@
 `default_nettype none
 module sms
 #(
-  parameter c_sdram       = 1, // 1:SDRAM, 0:BRAM 32K
   parameter c_vga_out     = 0, // 0; Just HDMI, 1: VGA and HDMI
   parameter c_diag        = 1  // 0: No led diagnostcs, 1: led diagnostics 
 )
 (
-  input         clk25_mhz,
+  input         clk_25mhz,
   // Buttons
   input [6:0]   btn,
   // Switches
@@ -47,7 +46,7 @@ module sms
 
   inout  [27:0] gp,gn,
   // Leds
-  output [7:0]  leds
+  output [7:0]  led
 );
 
   // Port numbers
@@ -59,6 +58,10 @@ module sms
   wire [7:0] ctrl_0_port = 8'hdc; // Not sure why there are 3 values
   wire [7:0] ctrl_1_port = 8'hdd; // for these ports
   wire [7:0] ctrl_2_port = 8'hde;
+
+  wire [7:0] mem_ctrl_port = 8'h3e;
+
+  reg [7:0] r_mem_ctrl;
 
   // pull-ups for us2 connector 
   assign usb_fpga_pu_dp = 1;
@@ -88,6 +91,7 @@ module sms
     end 
   endgenerate
 
+  // Led diagnostics
   reg [15:0] diag16;
 
   generate 
@@ -102,6 +106,7 @@ module sms
     end
   endgenerate
   
+  // CPU registers
   wire          n_WR;
   wire          n_RD;
   wire          n_INT;
@@ -118,11 +123,12 @@ module sms
   wire          n_kbdCS;
   wire          n_int;
 
-  reg [3:0]     cpuClockCount;
+  reg [2:0]     cpuClockCount;
   wire          cpuClockEnable;
   reg           cpuClockEnable1; 
   wire          cpuClockEdge = cpuClockEnable && !cpuClockEnable1;
   wire [7:0]    ramOut;
+  wire [7:0]    biosOut;
   wire [7:0]    romOut;
 
   // ===============================================================
@@ -140,7 +146,7 @@ module sms
   )
   ecp5pll_inst
   (
-    .clk_i(clk25_mhz),
+    .clk_i(clk_25mhz),
     .clk_o(clocks),
     .locked(clk_sdram_locked)
   );
@@ -153,7 +159,6 @@ module sms
   // ===============================================================
   // Joystick for OSD control and games
   // ===============================================================
-
   reg [6:0] R_btn_joy;
   always @(posedge cpuClock)
     R_btn_joy <= btn;
@@ -161,7 +166,6 @@ module sms
   // ===============================================================
   // SPI Slave for RAM and CPU control
   // ===============================================================
-
   wire        spi_ram_wr, spi_ram_rd;
   wire [31:0] spi_ram_addr;
   wire  [7:0] spi_ram_di;
@@ -221,12 +225,14 @@ module sms
   always @(posedge cpuClock)
     n_hard_reset <= pwr_up_reset_n & btn[0] & ~R_cpu_control[0];
 
+  wire reset = !n_hard_reset;
+
   wire sound_ready;
 
   tv80n cpu1 (
     .reset_n(n_hard_reset),
-    //.clk(cpuClock), // turbo mode 28MHz
     .clk(cpuClockEnable), // normal mode 3.5MHz
+    //.wait_n(!R_btn_joy[1]),
     .wait_n(1'b1),
     .int_n(n_int),
     .nmi_n(1'b1),
@@ -245,23 +251,21 @@ module sms
   // ===============================================================
   // RAM
   // ===============================================================
-  ram ram1k (
+  ram ram8k (
     .clk(cpuClock),
     .we(cpuAddress[15:14] == 3 && !n_memWR),
-    .addr(cpuAddress[9:0]),
+    .addr(cpuAddress[12:0]),
     .din(cpuDataOut),
     .dout(ramOut)
   );
 
   // ===============================================================
-  // GAME ROM
+  // GAME ROM (uses SDRAM)
   // ===============================================================
   wire sdram_d_wr;
   wire [15:0] sdram_d_in, sdram_d_out;
   assign sdram_d = sdram_d_wr ? sdram_d_out : 16'hzzzz;
   assign sdram_d_in = sdram_d;
-  generate
-  if(c_sdram)
   sdram
   sdram_i
   (
@@ -292,16 +296,15 @@ module sms
    .oeB(0),
    .doutB()
   );
-  else
-  gamerom rom8 (
+  
+  // ===============================================================
+  // BIOS ROM
+  // ===============================================================
+  rom #(.MEM_INIT_FILE("../roms/bios.mem")) bios_rom (
     .clk(cpuClock),
-    .we_b(spi_ram_wr && spi_ram_addr[31:24] == 8'h00), // used by OSD
-    .addr_b(spi_ram_addr),
-    .din_b(spi_ram_di),
-    .addr(cpuAddress),
-    .dout(romOut)
+    .addr(cpuAddress[13:0]),
+    .dout(biosOut)
   );
-  endgenerate
 
   // ===============================================================
   // VGA
@@ -314,7 +317,11 @@ module sms
   reg         is_second_addr_byte = 0;
   reg [7:0]   first_addr_byte;
   reg [7:0]   r_vdp [0:10];
-  wire [2:0]  mode = r_vdp[0][2] ? 4 : r_vdp[1][3] ? 3 : r_vdp[0][1] ? 2 : r_vdp[1][4] ? 0 : 1;
+  wire        m1 = r_vdp[1][4];
+  wire        m2 = r_vdp[0][1];
+  wire        m3 = r_vdp[1][3];
+  wire        m4 = r_vdp[0][2];
+  wire [2:0]  mode = m4 ? 4 : m3 ? 3 : m2 ? 2 : m1 ? 1 : 0;
   wire [13:0] name_table_addr = {r_vdp[2][3:1], 11'b0};
   wire [13:0] color_table_addr = (mode == 2 ? {r_vdp[3][7], 13'b0} : {r_vdp[3], 6'b0});
   wire [13:0] font_addr = mode == 2 ? {r_vdp[4][2],13'b0} : {r_vdp[4], 11'b0};
@@ -331,23 +338,30 @@ module sms
   wire        too_many_sprites;
   wire        interrupt_flag;
 
+  // I/O ports
   always @(posedge cpuClock) begin
-    if (cpuClockEdge) begin
+    if (!n_hard_reset) begin
+      r_mem_ctrl <= 8'hf7;
+    end else if (cpuClockEdge) begin
       // VDP interface
       if (vga_wr) vga_addr <= vga_addr + 1;
       // Increment address on CPU cycle after IO read
       r_vga_rd <= vga_rd;
       if (r_vga_rd && !vga_rd) vga_addr <= vga_addr + 1;
 
+      // Clear second address byte flag on VDP ctrl read or data read or write
+      if ((cpuAddress[7:0] == vdp_ctrl_port && n_ioRD == 1'b0) || vga_rd || vga_wr) is_second_addr_byte <= 0;
       if (cpuAddress[7:0] == vdp_ctrl_port && n_ioWR == 1'b0) begin
         is_second_addr_byte <= ~is_second_addr_byte;
         if (is_second_addr_byte) begin
           if (!cpuDataOut[7])
-            vga_addr <=  {cpuDataOut[5:0], first_addr_byte};
-          else if (cpuDataOut[5:0] < 11) 
-              r_vdp[cpuDataOut[5:0]] <= first_addr_byte;
+            vga_addr <= {cpuDataOut[5:0], first_addr_byte};
+          else if (cpuDataOut[7:6] == 2 && cpuDataOut[3:0] < 11)
+            r_vdp[cpuDataOut[3:0]] <= first_addr_byte;
         end else
           first_addr_byte <= cpuDataOut;
+      end else if (cpuAddress[7:0] == mem_ctrl_port && n_ioWR == 1'b0) begin
+        r_mem_ctrl <= cpuDataOut; // Memory control write
       end
     end
   end
@@ -452,8 +466,10 @@ module sms
 		      cpuAddress[7:0] == ctrl_0_port && n_ioRD == 1'b0 ? joy_data :
 		      cpuAddress[7:0] == ctrl_1_port && n_ioRD == 1'b0 ? joy_data :
 		      cpuAddress[7:0] == ctrl_2_port && n_ioRD == 1'b0 ? joy_data :
-                      cpuAddress[15:14] < 3    && n_memRD == 1'b0 ? romOut : ramOut;
+                      cpuAddress[15:14] < 3 && n_memRD == 1'b0 ? 
+                        (r_mem_ctrl[3] == 0 ? biosOut : 8'hff) : ramOut;
 
+  // Sprite collision interrupt
   always @(posedge cpuClock) begin
     if (!n_hard_reset) begin
       r_interrupt_flag <= 0;
@@ -502,14 +518,15 @@ module sms
     .ready(sound_ready),
     .d(cpuDataOut),
     .audio_out(sound_ao)
-);
-
+  );
 
   // ===============================================================
   // Leds
   // ===============================================================
-  assign leds = {!n_hard_reset, mode};
+  assign led = {pc[15:14], !n_hard_reset, mode};
 
-  always @(posedge cpuClock) diag16 <= {r_vdp[6], r_vdp[5]};
+  always @(posedge cpuClock) diag16 <= {r_vdp[1], r_vdp[0]};
+  //always @(posedge cpuClock) diag16 <= r_mem_ctrl;
+  //always @(posedge cpuClock) diag16 <= pc;
 
 endmodule

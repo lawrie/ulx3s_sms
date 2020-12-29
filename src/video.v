@@ -293,21 +293,25 @@ module video (
       end
       // Fetch the pattern data, on odd cycles
       if (hc[0] == 1) begin
-        if (hc < HA) begin 
-          // Fetch the font for screen mode 1 to 3
-          if (x_pix == 5) begin
-            // Set address for next character
-            vid_addr <= name_table_addr + {y[7:3], next_char};
-          end else if (x_pix == 6) begin
-            // Set address for font line, 3 blocks if mode == 2
-            if (mode == 3) vid_addr <= font_addr + {vid_out, y[4:2]};
-            else vid_addr <= font_addr + (mode == 2 ? {y[7:6] , 11'b0} : 13'b0) +  {vid_out, y[2:0]};
-          end else if (x_pix == 7) begin
-            // Store the font line (or colors for mode 3) ready for next character
-            font_line <= vid_out;
-            // For modeis 1 or  2, set screen color for next block
-            if (mode == 1 || mode == 2) begin
-              screen_color <= screen_color_next;
+        if (hc < HA) begin
+          if (mode == 4) begin
+            screen_color <= 8'h65;
+          end else begin
+            // Fetch the font for screen mode 1 to 3
+            if (x_pix == 5) begin
+              // Set address for next character
+              vid_addr <= name_table_addr + {y[7:3], next_char};
+            end else if (x_pix == 6) begin
+              // Set address for font line, 3 blocks if mode == 2
+              if (mode == 3) vid_addr <= font_addr + {vid_out, y[4:2]};
+              else vid_addr <= font_addr + (mode == 2 ? {y[7:6] , 11'b0} : 13'b0) +  {vid_out, y[2:0]};
+            end else if (x_pix == 7) begin
+              // Store the font line (or colors for mode 3) ready for next character
+              font_line <= vid_out;
+              // For modes 1 or  2, set screen color for next block
+              if (mode == 1 || mode == 2) begin
+                screen_color <= screen_color_next;
+              end
             end
           end
           // Position the sprites
