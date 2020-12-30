@@ -33,7 +33,7 @@ module video (
   output [4:0]  sprite5,
   input [7:0]   x_scroll,
   input [7:0]   y_scroll,
-  output [7:0]  diag
+  output [15:0]  diag
 );
 
   // VGA output parameters for 60hz 640x480
@@ -188,6 +188,12 @@ module video (
   wire vBorder = (vc < VB || vc >= VA - VB);
   wire border = hBorder || vBorder;
 
+  // Mode 4 data
+  reg [7:0] first_index_byte;
+  reg [7:0] second_index_byte;
+  reg [7:0] bit_plane [0:3];
+  reg [7:0] bit_plane_next [0:3];
+
   // VRAM
   reg [13:0] vid_addr;
   wire [7:0] vid_out; 
@@ -296,6 +302,20 @@ module video (
         if (hc < HA) begin
           if (mode == 4) begin
             screen_color <= 8'h65;
+            if (x_pix == 0) begin
+              vid_addr <= name_table_addr + {y[7:3], next_char, 1'b0};
+            end else if (x_pix == 1) begin
+              first_index_byte <= vid_out;
+              vid_addr <= vid_addr + 1;
+            end else if (x_pix == 2) begin
+              second_index_byte <= vid_out;
+              vid_addr <= font_addr + {vid_out[0], first_index_byte, y[2:0], 2'b0};
+            end else if (x_pix < 7) begin
+              vid_addr <= vid_addr + 1;
+              bit_plane_next[x_pix - 4] <= vid_out;
+            end else if (x_pix == 7) begin
+              for(i=0;i<4;i++) bit_plane[i] <= bit_plane_next[i];
+            end
           end else begin
             // Fetch the font for screen mode 1 to 3
             if (x_pix == 5) begin
@@ -402,6 +422,7 @@ module video (
                            sprite_pixel[3] ? sprite_color[3] : 
                            mode == 0 ? (font_line[~x_pix] ? text_color : back_color) :
                            mode == 3 ? (x_pix < 4 ? font_line[7:4] : font_line[3:0]) :
+                           mode == 4 ? {bit_plane[3][~x_pix], bit_plane[2][~x_pix], bit_plane[1][~x_pix], bit_plane[0][~x_pix]} :
                            font_line[~x_pix] ? screen_color[7:4] : screen_color[3:0];
   
   // Set the 24-bit color value, taking border into account
@@ -412,6 +433,6 @@ module video (
   assign vga_g = !vga_de ? 8'b0 : color[15:8];
   assign vga_b = !vga_de ? 8'b0 : color[7:0];
 
-  assign diag = 0;
+  assign diag = {first_index_byte, second_index_byte};
 
 endmodule
