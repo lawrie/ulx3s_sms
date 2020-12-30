@@ -312,7 +312,6 @@ module sms
   wire        vga_de;
   wire [7:0]  vga_dout;
   reg [13:0]  vga_addr;
-  reg [5:0]   cram_addr;
   wire        vga_wr = cpuAddress[7:0] == vdp_data_port && n_ioWR == 1'b0;
   wire        vga_rd = cpuAddress[7:0] == vdp_data_port && n_ioRD == 1'b0;
   reg         is_second_addr_byte = 0;
@@ -324,7 +323,7 @@ module sms
   wire        m4 = r_vdp[0][2];
   wire [2:0]  mode = m4 ? 4 : m3 ? 3 : m2 ? 2 : m1 ? 1 : 0;
   wire [13:0] name_table_addr = {r_vdp[2][3:1], 11'b0};
-  wire [13:0] color_table_addr = (mode == 2 ? {r_vdp[3][7], 13'b0} : {r_vdp[3], 6'b0});
+  wire [13:0] color_table_addr = mode == 2 ? {r_vdp[3][7], 13'b0} : {r_vdp[3], 6'b0};
   wire [13:0] font_addr = mode == 4 ? 0 : mode == 2 ? {r_vdp[4][2],13'b0} : {r_vdp[4], 11'b0};
   wire [13:0] sprite_attr_addr = {r_vdp[5][6:1], 8'b0};
   wire [13:0] sprite_pattern_table_addr = {r_vdp[6][2:0], 11'b0};
@@ -338,6 +337,7 @@ module sms
   wire        sprite_collision;
   wire        too_many_sprites;
   wire        interrupt_flag;
+  reg         cram_selected;
 
   // I/O ports
   always @(posedge cpuClock) begin
@@ -355,11 +355,18 @@ module sms
       if (cpuAddress[7:0] == vdp_ctrl_port && n_ioWR == 1'b0) begin
         is_second_addr_byte <= ~is_second_addr_byte;
         if (is_second_addr_byte) begin
-          if (!cpuDataOut[7]) // Ignores bit 6 which says if VRAM read or write is coming next
+          if (!cpuDataOut[7]) begin // Ignores bit 6 which says if VRAM read or write is coming next
             vga_addr <= {cpuDataOut[5:0], first_addr_byte};
-          else if (cpuDataOut[7:6] == 2 && cpuDataOut[3:0] < 11)
+            cram_selected <= 0;
+          end else if (cpuDataOut[7:6] == 3) begin // CRAM
+            vga_addr <= first_addr_byte[5:0];
+            cram_selected <= 1;
+          end else if (cpuDataOut[7:6] == 2 && cpuDataOut[3:0] < 11) begin
             r_vdp[cpuDataOut[3:0]] <= first_addr_byte;
-          else cram_addr <= first_addr_byte[5:0];
+          end else begin 
+            vga_addr <= first_addr_byte[5:0];
+            cram_selected <= 1;
+          end
         end else
           first_addr_byte <= cpuDataOut;
       end else if (cpuAddress[7:0] == mem_ctrl_port && n_ioWR == 1'b0) begin
@@ -401,6 +408,7 @@ module sms
     .interrupt_flag(interrupt_flag),
     .x_scroll(x_scroll),
     .y_scroll(y_scroll),
+    .cram_selected(cram_selected),
     .diag(vga_diag)
   );
 
@@ -527,6 +535,6 @@ module sms
   // ===============================================================
   assign led = {pc[15:14], !n_hard_reset, mode};
 
-  always @(posedge cpuClock) diag16 <= vga_diag;
+  always @(posedge cpuClock) diag16 <= pc;
 
 endmodule

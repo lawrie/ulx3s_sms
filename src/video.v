@@ -20,6 +20,7 @@ module video (
   input [13:0]  sprite_attr_addr,
   input [13:0]  sprite_pattern_table_addr,
   input [13:0]  color_table_addr,
+  input         cram_selected,
   input         video_on,
   input [3:0]   text_color,
   input [3:0]   back_color,
@@ -83,23 +84,44 @@ module video (
   localparam gray         = 24'h777777;
   localparam white        = 24'hffffff;
 
-  wire [23:0] colors [0:15];
-  assign colors[0]  = transparent;
-  assign colors[1]  = black;
-  assign colors[2]  = medium_green;
-  assign colors[3]  = light_green;
-  assign colors[4]  = dark_blue;
-  assign colors[5]  = light_blue;
-  assign colors[6]  = dark_red;
-  assign colors[7]  = cyan;
-  assign colors[8]  = medium_red;
-  assign colors[9]  = light_red;
-  assign colors[10] = dark_yellow;
-  assign colors[11] = light_yellow;
-  assign colors[12] = dark_green;
-  assign colors[13] = magenta;
-  assign colors[14] = gray;
-  assign colors[15] = white;
+  reg [23:0] colors1 [0:15];
+  reg [23:0] colors2 [0:15];
+
+  initial begin
+    colors1[0]  = transparent;
+    colors1[1]  = black;
+    colors1[2]  = medium_green;
+    colors1[3]  = light_green;
+    colors1[4]  = dark_blue;
+    colors1[5]  = light_blue;
+    colors1[6]  = dark_red;
+    colors1[7]  = cyan;
+    colors1[8]  = medium_red;
+    colors1[9]  = light_red;
+    colors1[10] = dark_yellow;
+    colors1[11] = light_yellow;
+    colors1[12] = dark_green;
+    colors1[13] = magenta;
+    colors1[14] = gray;
+    colors1[15] = white;
+
+    colors2[0]  = transparent;
+    colors2[1]  = black;
+    colors2[2]  = medium_green;
+    colors2[3]  = light_green;
+    colors2[4]  = dark_blue;
+    colors2[5]  = light_blue;
+    colors2[6]  = dark_red;
+    colors2[7]  = cyan;
+    colors2[8]  = medium_red;
+    colors2[9]  = light_red;
+    colors2[10] = dark_yellow;
+    colors2[11] = light_yellow;
+    colors2[12] = dark_green;
+    colors2[13] = magenta;
+    colors2[14] = gray;
+    colors2[15] = white;
+  end
 
   // Data for graphics and sprites
   reg [7:0] screen_color;
@@ -201,7 +223,7 @@ module video (
   vram video_ram (
     .clk_a(cpu_clk),
     .addr_a(vga_addr),
-    .we_a(vga_wr),
+    .we_a(vga_wr && !cram_selected),
     .re_a(vga_rd),
     .din_a(vga_din),
     .dout_a(vga_dout),
@@ -209,6 +231,16 @@ module video (
     .addr_b(vid_addr),
     .dout_b(vid_out)
   );
+
+  always @(posedge cpu_clk) begin
+    if (vga_wr && cram_selected) begin
+      if (vga_addr < 16) begin
+        colors1[vga_addr] <= {vga_din[1:0], 6'b0, vga_din[3:2], 6'b0, vga_din[5:4], 6'b0};
+      end else if (vga_addr < 32) begin
+        colors2[vga_addr - 16] <= {vga_din[1:0], 6'b0, vga_din[3:2], 6'b0, vga_din[5:4], 6'b0};
+      end
+    end
+  end
 
   // Calculate pixel positions for 4 active sprites
   wire [2:0] sprite_col [0:NUM_ACTIVE_SPRITES-1];
@@ -312,7 +344,7 @@ module video (
               vid_addr <= font_addr + {vid_out[0], first_index_byte, y[2:0], 2'b0};
             end else if (x_pix < 7) begin
               vid_addr <= vid_addr + 1;
-              bit_plane_next[x_pix - 4] <= vid_out;
+              bit_plane_next[x_pix - 3] <= vid_out;
             end else if (x_pix == 7) begin
               for(i=0;i<4;i++) bit_plane[i] <= bit_plane_next[i];
             end
@@ -426,7 +458,7 @@ module video (
                            font_line[~x_pix] ? screen_color[7:4] : screen_color[3:0];
   
   // Set the 24-bit color value, taking border into account
-  wire [23:0] color = colors[border ? back_color : pixel_color];
+  wire [23:0] color = colors1[border ? back_color : pixel_color];
 
   // Set the 8-bit VGA output signals
   assign vga_r = !vga_de ? 8'b0 : color[23:16];
