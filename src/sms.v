@@ -326,7 +326,7 @@ module sms
   wire [13:0] color_table_addr = mode == 2 ? {r_vdp[3][7], 13'b0} : {r_vdp[3], 6'b0};
   wire [13:0] font_addr = mode == 4 ? 0 : mode == 2 ? {r_vdp[4][2],13'b0} : {r_vdp[4], 11'b0};
   wire [13:0] sprite_attr_addr = {r_vdp[5][6:1], 8'b0};
-  wire [13:0] sprite_pattern_table_addr = {r_vdp[6][2:0], 11'b0};
+  wire [13:0] sprite_pattern_table_addr = mode == 4 ? {r_vdp[6][2], 13'b0} : {r_vdp[6][2:0], 11'b0};
   wire [3:0]  overscan_color = r_vdp[7][3:0];
   wire [7:0]  x_scroll = r_vdp[8];
   wire [7:0]  y_scroll = r_vdp[9];
@@ -377,6 +377,7 @@ module sms
       
   video vga (
     .clk(clk_vga),
+    .reset(reset),
     .vga_r(red),
     .vga_g(green),
     .vga_b(blue),
@@ -409,6 +410,9 @@ module sms
     .x_scroll(x_scroll),
     .y_scroll(y_scroll),
     .cram_selected(cram_selected),
+    .disable_vert(r_vdp[0][7]),
+    .disable_horiz(r_vdp[0][6]),
+    .backdrop_color(r_vdp[7][3:0]),
     .diag(vga_diag)
   );
 
@@ -535,6 +539,6 @@ module sms
   // ===============================================================
   assign led = {pc[15:14], !n_hard_reset, mode};
 
-  always @(posedge cpuClock) diag16 <= pc;
+  always @(posedge cpuClock) diag16 <= sprite_pattern_table_addr;
 
 endmodule
