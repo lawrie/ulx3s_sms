@@ -137,6 +137,9 @@ module sms
   wire [7:0]    biosOut;
   wire [7:0]    romOut;
 
+  reg [7:0]   slot0, slot1, slot2;
+  reg [7:0]   mem_misc;
+  
   // ===============================================================
   // System Clock generation
   // ===============================================================
@@ -270,6 +273,10 @@ module sms
   // ===============================================================
   wire sdram_d_wr;
   wire [15:0] sdram_d_in, sdram_d_out;
+  wire [23:0] sdramAddress = cpuAddress[15:14] == 0 ? {slot0, cpuAddress[13:0]} :
+                    cpuAddress[15:14] == 1 ? {slot1, cpuAddress[13:0]} :
+                    cpuAddress[15:14] == 2 ? {slot2, cpuAddress[13:0]} : cpuAddress;
+
   assign sdram_d = sdram_d_wr ? sdram_d_out : 16'hzzzz;
   assign sdram_d_in = sdram_d;
   sdram
@@ -291,7 +298,7 @@ module sms
    .we_out(sdram_d_wr),
    // cpu/chipset interface
    .weA(0),
-   .addrA(cpuAddress),
+   .addrA(sdramAddress),
    .oeA(cpuClockEnable),
    .dinA(0),
    .doutA(romOut),
@@ -349,6 +356,10 @@ module sms
   always @(posedge cpuClock) begin
     if (!n_hard_reset) begin
       r_mem_ctrl <= 8'hf7;
+      slot0 <= 0;
+      slot1 <= 1;
+      slot2 <= 2;
+      mem_misc <= 0;
     end else if (cpuClockEdge) begin
       // VDP interface
       if (vga_wr) vga_addr <= vga_addr + 1;
@@ -378,6 +389,11 @@ module sms
       end else if (cpuAddress[7:0] == mem_ctrl_port && n_ioWR == 1'b0) begin
         r_mem_ctrl <= cpuDataOut; // Memory control write
       end
+
+      if (cpuAddress == 16'hfffc && n_memWR == 1'b0) mem_misc <= cpuDataOut;
+      else if (cpuAddress == 16'hfffd && n_memWR == 1'b0) slot0 <= cpuDataOut;
+      else if (cpuAddress == 16'hfffe && n_memWR == 1'b0) slot1 <= cpuDataOut;
+      else if (cpuAddress == 16'hffff && n_memWR == 1'b0) slot2 <= cpuDataOut;
     end
   end
       
@@ -418,7 +434,6 @@ module sms
     .cram_selected(cram_selected),
     .disable_vert(r_vdp[0][7]),
     .disable_horiz(r_vdp[0][6]),
-    .backdrop_color(r_vdp[7][3:0]),
     .v_counter(v_counter),
     .h_counter(h_counter),
     .diag(vga_diag)
@@ -550,6 +565,6 @@ module sms
   // ===============================================================
   assign led = {pc[15:14], !n_hard_reset, mode};
 
-  always @(posedge cpuClock) diag16 <= sprite_pattern_table_addr;
+  always @(posedge cpuClock) diag16 <= {mem_misc, slot1};;
 
 endmodule

@@ -36,7 +36,6 @@ module video (
   input [7:0]   y_scroll,
   input         disable_vert,
   input         disable_horiz,
-  input [3:0]   backdrop_color,
   output [7:0]  v_counter,
   output [7:0]  h_counter,
   output [15:0] diag
