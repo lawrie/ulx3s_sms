@@ -61,6 +61,12 @@ module sms
 
   wire [7:0] mem_ctrl_port = 8'h3e;
 
+  wire [7:0] v_counter_port = 8'h7e;
+  wire [7:0] h_counter_port = 8'h7f;
+
+  wire [7:0] v_counter;
+  wire [7:0] h_counter;
+
   reg [7:0] r_mem_ctrl;
 
   // pull-ups for us2 connector 
@@ -413,6 +419,8 @@ module sms
     .disable_vert(r_vdp[0][7]),
     .disable_horiz(r_vdp[0][6]),
     .backdrop_color(r_vdp[7][3:0]),
+    .v_counter(v_counter),
+    .h_counter(h_counter),
     .diag(vga_diag)
   );
 
@@ -480,8 +488,11 @@ module sms
 		      cpuAddress[7:0] == ctrl_0_port && n_ioRD == 1'b0 ? joy_data :
 		      cpuAddress[7:0] == ctrl_1_port && n_ioRD == 1'b0 ? joy_data :
 		      cpuAddress[7:0] == ctrl_2_port && n_ioRD == 1'b0 ? joy_data :
+                      // V and H counters
+                      cpuAddress[7:0] == v_counter_port && n_ioRD == 1'b0 ? v_counter :
+                      cpuAddress[7:0] == h_counter_port && n_ioRD == 1'b0 ? h_counter :
                       cpuAddress[15:14] < 3 && n_memRD == 1'b0 ? 
-                        (r_mem_ctrl[3] == 0 ? biosOut : 8'hff) : ramOut;
+                        (r_mem_ctrl[3] == 0 ? biosOut : romOut) : ramOut;
 
   // Sprite collision interrupt
   always @(posedge cpuClock) begin

@@ -37,6 +37,8 @@ module video (
   input         disable_vert,
   input         disable_horiz,
   input [3:0]   backdrop_color,
+  output [7:0]  v_counter,
+  output [7:0]  h_counter,
   output [15:0] diag
 );
 
@@ -201,6 +203,9 @@ module video (
   // Set x and y to screen pixel coordinates. x not valid in text mode
   wire [7:0] x = hc[9:1] - HB2;
   wire [7:0] y = vc[9:1] - VB2;
+
+  assign v_counter = y;
+  assign h_counter = x;
 
   // Set the x position as a character and pixel offset. Valid in all modes.
   reg [5:0] x_char;
