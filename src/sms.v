@@ -495,7 +495,7 @@ module sms
   reg  r_interrupt_flag, r_sprite_collision;
   reg  r_status_read;
   wire [7:0] status = {r_interrupt_flag, too_many_sprites, r_sprite_collision, (too_many_sprites ? sprite5 : 5'b11111)};
-  wire [7:0] joy_data = {~btn[2:1], ~btn[6:1]};
+  wire [7:0] joy_data = {~btn[2:1], ~btn[6:3]};
 
   assign cpuDataIn =  cpuAddress[7:0] == vdp_data_port && n_ioRD == 1'b0 ? vga_dout :
                       cpuAddress[7:0] == vdp_ctrl_port && n_ioRD == 1'b0 ? status :
@@ -565,6 +565,6 @@ module sms
   // ===============================================================
   assign led = {pc[15:14], !n_hard_reset, mode};
 
-  always @(posedge cpuClock) diag16 <= {mem_misc, slot1};;
+  always @(posedge cpuClock) diag16 <= {x_scroll, y_scroll};;
 
 endmodule

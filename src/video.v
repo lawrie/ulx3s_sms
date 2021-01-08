@@ -473,7 +473,7 @@ module video (
                            sprite_pixel[3] ? sprite_color[3] : 
                            mode == 0 ? (font_line[~x_pix] ? text_color : back_color) :
                            mode == 3 ? (x_pix < 4 ? font_line[7:4] : font_line[3:0]) :
-                           mode == 4 ? (x_scroll[2:0] > x_pix[2:0] ? 0 : {bit_plane[3][~x_scroll_pix], bit_plane[2][~x_scroll_pix], bit_plane[1][~x_scroll_pix], bit_plane[0][~x_scroll_pix]}) :
+                           mode == 4 ? {bit_plane[3][~x_scroll_pix], bit_plane[2][~x_scroll_pix], bit_plane[1][~x_scroll_pix], bit_plane[0][~x_scroll_pix]} :
                            font_line[~x_pix] ? screen_color[7:4] : screen_color[3:0];
   
   // Set the 24-bit color value, taking border into account
