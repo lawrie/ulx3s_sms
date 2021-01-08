@@ -49,20 +49,20 @@ module sms
   output [7:0]  led
 );
 
-  // Port numbers
-  wire [7:0] vdp_ctrl_port = 8'hbf;
-  wire [7:0] vdp_data_port = 8'hbe;
+  // I/O ports
+  wire vdp_data_port = cpuAddress[7:6] == 2 && !cpuAddress[0];
+  wire vdp_ctrl_port = cpuAddress[7:6] == 2 && cpuAddress[0];
 
-  wire [7:0] psg_write_port = 8'h7f;
+  wire psg_write_port = cpuAddress[7:6] == 1 && cpuAddress[0];
 
-  wire [7:0] ctrl_0_port = 8'hdc; // Not sure why there are 3 values
-  wire [7:0] ctrl_1_port = 8'hdd; // for these ports
-  wire [7:0] ctrl_2_port = 8'hde;
+  wire joypad_0_port = cpuAddress[7:6] == 3 && !cpuAddress[0];
+  wire joypad_1_port = cpuAddress[7:6] == 3 && cpuAddress[0];
 
-  wire [7:0] mem_ctrl_port = 8'h3e;
+  wire mem_ctrl_port = cpuAddress[7:6] == 0 && !cpuAddress[0];
+  wire joypad_ctrl_port = cpuAddress[7:6] == 0 && cpuAddress[0];
 
-  wire [7:0] v_counter_port = 8'h7e;
-  wire [7:0] h_counter_port = 8'h7f;
+  wire v_counter_port = cpuAddress[7:6] == 1 && !cpuAddress[0];
+  wire h_counter_port = cpuAddress[7:6] == 1 && cpuAddress[0];
 
   wire [7:0] v_counter;
   wire [7:0] h_counter;
@@ -325,8 +325,8 @@ module sms
   wire        vga_de;
   wire [7:0]  vga_dout;
   reg [13:0]  vga_addr;
-  wire        vga_wr = cpuAddress[7:0] == vdp_data_port && n_ioWR == 1'b0;
-  wire        vga_rd = cpuAddress[7:0] == vdp_data_port && n_ioRD == 1'b0;
+  wire        vga_wr = vdp_data_port && n_ioWR == 1'b0;
+  wire        vga_rd = vdp_data_port && n_ioRD == 1'b0;
   reg         is_second_addr_byte = 0;
   reg [7:0]   first_addr_byte;
   reg [7:0]   r_vdp [0:10];
@@ -368,8 +368,8 @@ module sms
       if (r_vga_rd && !vga_rd) vga_addr <= vga_addr + 1;
 
       // Clear second address byte flag on VDP ctrl read or data read or write
-      if ((cpuAddress[7:0] == vdp_ctrl_port && n_ioRD == 1'b0) || vga_rd || vga_wr) is_second_addr_byte <= 0;
-      if (cpuAddress[7:0] == vdp_ctrl_port && n_ioWR == 1'b0) begin
+      if ((vdp_ctrl_port && n_ioRD == 1'b0) || vga_rd || vga_wr) is_second_addr_byte <= 0;
+      if (vdp_ctrl_port && n_ioWR == 1'b0) begin
         is_second_addr_byte <= ~is_second_addr_byte;
         if (is_second_addr_byte) begin
           if (!cpuDataOut[7]) begin // Ignores bit 6 which says if VRAM read or write is coming next
@@ -386,7 +386,7 @@ module sms
           end
         end else
           first_addr_byte <= cpuDataOut;
-      end else if (cpuAddress[7:0] == mem_ctrl_port && n_ioWR == 1'b0) begin
+      end else if (mem_ctrl_port && n_ioWR == 1'b0) begin
         r_mem_ctrl <= cpuDataOut; // Memory control write
       end
 
@@ -495,17 +495,17 @@ module sms
   reg  r_interrupt_flag, r_sprite_collision;
   reg  r_status_read;
   wire [7:0] status = {r_interrupt_flag, too_many_sprites, r_sprite_collision, (too_many_sprites ? sprite5 : 5'b11111)};
-  wire [7:0] joy_data = {~btn[2:1], ~btn[6:3]};
+  wire [7:0] joy_data0 = {~btn[2:1], ~btn[6:3]};
+  wire [7:0] joy_data1 = {~btn[2:1], ~btn[6:3]};
 
-  assign cpuDataIn =  cpuAddress[7:0] == vdp_data_port && n_ioRD == 1'b0 ? vga_dout :
-                      cpuAddress[7:0] == vdp_ctrl_port && n_ioRD == 1'b0 ? status :
+  assign cpuDataIn =  vdp_data_port && n_ioRD == 1'b0 ? vga_dout :
+                      vdp_ctrl_port && n_ioRD == 1'b0 ? status :
 		      // Controllers 0 and 1
-		      cpuAddress[7:0] == ctrl_0_port && n_ioRD == 1'b0 ? joy_data :
-		      cpuAddress[7:0] == ctrl_1_port && n_ioRD == 1'b0 ? joy_data :
-		      cpuAddress[7:0] == ctrl_2_port && n_ioRD == 1'b0 ? joy_data :
+		      joypad_0_port && n_ioRD == 1'b0 ? joy_data0 :
+		      joypad_1_port && n_ioRD == 1'b0 ? joy_data1 :
                       // V and H counters
-                      cpuAddress[7:0] == v_counter_port && n_ioRD == 1'b0 ? v_counter :
-                      cpuAddress[7:0] == h_counter_port && n_ioRD == 1'b0 ? h_counter :
+                      v_counter_port && n_ioRD == 1'b0 ? v_counter :
+                      h_counter_port && n_ioRD == 1'b0 ? h_counter :
                       cpuAddress[15:14] < 3 && n_memRD == 1'b0 ? 
                         (r_mem_ctrl[3] == 0 ? biosOut : romOut) : ramOut;
 
@@ -518,8 +518,8 @@ module sms
       if (interrupt_flag) r_interrupt_flag <= 1;
       if (sprite_collision) r_sprite_collision <= 1;
       if (cpuClockEdge) begin
-        r_status_read <= cpuAddress[7:0] == vdp_ctrl_port && n_ioRD == 1'b0;
-        if (r_status_read && !(cpuAddress[7:0] == vdp_ctrl_port && n_ioRD == 1'b0)) begin
+        r_status_read <= vdp_ctrl_port && n_ioRD == 1'b0;
+        if (r_status_read && !(vdp_ctrl_port && n_ioRD == 1'b0)) begin
           r_interrupt_flag <= 0;
           r_sprite_collision <= 0;
         end
@@ -554,7 +554,7 @@ module sms
     .clk_en(cpuClockEnable),
     .reset(!n_hard_reset),
     .ce_n(1'b0),
-    .we_n(!(cpuAddress[7:0] == psg_write_port && n_ioWR == 1'b0)),
+    .we_n(!(psg_write_port && n_ioWR == 1'b0)),
     .ready(sound_ready),
     .d(cpuDataOut),
     .audio_out(sound_ao)
