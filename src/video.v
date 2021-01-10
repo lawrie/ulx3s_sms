@@ -61,7 +61,7 @@ module video (
 
   localparam NUM_SPRITES = 32;
   localparam NUM_SPRITES2 = NUM_SPRITES * 2;
-  localparam NUM_ACTIVE_SPRITES = 4;
+  localparam NUM_ACTIVE_SPRITES = 8;
   localparam NUM_ACTIVE_SPRITES2 = NUM_ACTIVE_SPRITES * 2;
   localparam NUM_ACTIVE_SPRITES8 = NUM_ACTIVE_SPRITES * 8;
 
@@ -70,7 +70,7 @@ module video (
   localparam SPRITE_PATTERN_SCAN_END = SPRITE_ATTR_SCAN_END + NUM_ACTIVE_SPRITES2;
   localparam SPRITE_PATTERN2_SCAN_END = SPRITE_PATTERN_SCAN_END + NUM_ACTIVE_SPRITES2;
 
-  // MSX color pallette
+  // MSX color palette
   localparam transparent  = 24'h000000;
   localparam black        = 24'h010101;
   localparam medium_green = 24'h3eb849;
@@ -219,6 +219,8 @@ module video (
   wire [4:0] next_char = x_char + 1;
   wire [4:0] next_scroll = next_char - x_scroll[7:3];
 
+  reg h_flip, palette, priority;
+
   // Calculate the border
   wire [9:0] hb_adj = (mode == 0 ? HBadj : 0);
   wire hBorder = (hc < (HB + hb_adj) || hc >= HA - HB - hb_adj);
@@ -359,12 +361,15 @@ module video (
                 vid_addr <= vid_addr + 1;
               end else if (x_scroll_pix == 2) begin
                 second_index_byte <= vid_out;
-                vid_addr <= font_addr + {vid_out[0], first_index_byte, y[2:0], 2'b0};
+                vid_addr <= font_addr + {vid_out[0], first_index_byte, (vid_out[2] ? ~y[2:0] : y[2:0]), 2'b0};
               end else if (x_scroll_pix < 7) begin
                 vid_addr <= vid_addr + 1;
                 bit_plane_next[x_scroll_pix - 3] <= vid_out;
               end else if (x_scroll_pix == 7) begin
                 for(i=0;i<4;i++) bit_plane[i] <= bit_plane_next[i];
+                h_flip <= second_index_byte[1];
+                palette <= second_index_byte[3];
+                priority = second_index_byte[4];
               end
             end else begin
               // Fetch the font for screen mode 1 to 3
@@ -406,58 +411,77 @@ module video (
             end
           // End of active area, fetch data for next line
           end else begin // Read sprite attributes and patterns
-            // Look at up to 32 sprites
-            if (vc[0] == 1) begin
-              if (hc >= HA && hc < SPRITE_SCAN_END) begin
-                // Fetch y attribute
-                vid_addr <= sprite_attr_addr + {hc[5:1], 2'b0};
-              end
-              // Check if sprite is on the line
-              if (hc >= HA + 2 && hc < SPRITE_SCAN_END + 2 && !sprites_done) begin
-                 if (vid_out == 208) sprites_done <= 1;
-                 else if (y32 >= sprite_sy && y32 < sprite_ey) begin
-                   if (num_sprites < 4) begin
-                     sprite_num[num_sprites] <= hc[5:1] - 1;
-                     num_sprites <= num_sprites + 1;
-                   end else begin
-                     sprite5 <= hc[5:1] - 1;
-                     sprites_done <= 1;
-                   end
+            if (mode == 4) begin
+              if (vc[0] == 1) begin
+                if (hc >= HA && hc < SPRITE_SCAN_END) begin
+                  vid_addr <= sprite_attr_addr + hc[6:1]; // Address of y attribute
+                end
+                if (hc >= HA + 2 && hc < SPRITE_SCAN_END + 2 && !sprites_done) begin
+                  if (vid_out == 208) sprites_done <= 1;
+                  else if (y32 >= sprite_sy && y32 < sprite_ey) begin
+                    if (num_sprites < NUM_ACTIVE_SPRITES) begin
+                      sprite_num[num_sprites] <= hc[6:1] - 1;
+                      num_sprites <= num_sprites + 1;
+                    end else begin
+                      sprites_done <= 1;
+                    end
+                  end
                 end
               end
-              // Read the sprite attributes for the row
-              if (hc >= SPRITE_SCAN_END && hc < SPRITE_ATTR_SCAN_END) 
-                vid_addr <= sprite_attr_addr + {sprite_num[hc[4:3]], hc[2:1]};
-              if (hc >= SPRITE_SCAN_END + 2 && hc < SPRITE_ATTR_SCAN_END + 2) begin
-                case ((hc[3:1] - 1) & 2'b11)
-                  0: sprite_y[sprite_index] <= vid_out;
-                  1: sprite_x[sprite_index] <= vid_out;
-                  2: sprite_pattern[sprite_index] <= vid_out;
-                  3: begin
-                       sprite_color[sprite_index] <= vid_out[3:0];
-                       sprite_ec[sprite_index] <= vid_out[7];
+            end else begin
+              // Look at up to 32 sprites
+              if (vc[0] == 1) begin
+                if (hc >= HA && hc < SPRITE_SCAN_END) begin
+                  // Fetch y attribute
+                  vid_addr <= sprite_attr_addr + {hc[5:1], 2'b0};
+                end
+                // Check if sprite is on the line
+                if (hc >= HA + 2 && hc < SPRITE_SCAN_END + 2 && !sprites_done) begin
+                   if (vid_out == 208) sprites_done <= 1;
+                   else if (y32 >= sprite_sy && y32 < sprite_ey) begin
+                     if (num_sprites < 4) begin
+                       sprite_num[num_sprites] <= hc[5:1] - 1;
+                       num_sprites <= num_sprites + 1;
+                     end else begin
+                       sprite5 <= hc[5:1] - 1;
+                       sprites_done <= 1;
                      end
-                endcase
-              end 
-              // Read the sprite patterns for the row
-              if (hc >= SPRITE_ATTR_SCAN_END && hc < SPRITE_PATTERN_SCAN_END)
-                if (sprite_large) 
-                  vid_addr <= sprite_pattern_table_addr + 
-                              {sprite_pattern[hc[2:1]][7:2],1'b0, sprite_row[hc[2:1]][3:0]};
-                else
-                  vid_addr <= sprite_pattern_table_addr + 
-                              {sprite_pattern[hc[2:1]], sprite_row[hc[2:1]][2:0]};
+                  end
+                end
+                // Read the sprite attributes for the row
+                if (hc >= SPRITE_SCAN_END && hc < SPRITE_ATTR_SCAN_END) 
+                  vid_addr <= sprite_attr_addr + {sprite_num[hc[4:3]], hc[2:1]};
+                if (hc >= SPRITE_SCAN_END + 2 && hc < SPRITE_ATTR_SCAN_END + 2) begin
+                  case ((hc[3:1] - 1) & 2'b11)
+                    0: sprite_y[sprite_index] <= vid_out;
+                    1: sprite_x[sprite_index] <= vid_out;
+                    2: sprite_pattern[sprite_index] <= vid_out;
+                    3: begin
+                         sprite_color[sprite_index] <= vid_out[3:0];
+                         sprite_ec[sprite_index] <= vid_out[7];
+                       end
+                  endcase
+                end 
+                // Read the sprite patterns for the row
+                if (hc >= SPRITE_ATTR_SCAN_END && hc < SPRITE_PATTERN_SCAN_END)
+                  if (sprite_large) 
+                    vid_addr <= sprite_pattern_table_addr + 
+                                {sprite_pattern[hc[2:1]][7:2],1'b0, sprite_row[hc[2:1]][3:0]};
+                  else
+                    vid_addr <= sprite_pattern_table_addr + 
+                                {sprite_pattern[hc[2:1]], sprite_row[hc[2:1]][2:0]};
 
-              if (hc >= SPRITE_ATTR_SCAN_END + 2 && hc < SPRITE_PATTERN_SCAN_END + 2) 
-                sprite_font[hc[2:1]-1] <= vid_out;
+                if (hc >= SPRITE_ATTR_SCAN_END + 2 && hc < SPRITE_PATTERN_SCAN_END + 2) 
+                  sprite_font[hc[2:1]-1] <= vid_out;
         
-              if (sprite_large) begin
-                if (hc >= SPRITE_PATTERN_SCAN_END  && hc < SPRITE_PATTERN2_SCAN_END) 
-                  vid_addr <= sprite_pattern_table_addr + 
-                              {sprite_pattern[hc[2:1]][7:2],1'b1, sprite_row[hc[2:1]][3:0]};
+                if (sprite_large) begin
+                  if (hc >= SPRITE_PATTERN_SCAN_END  && hc < SPRITE_PATTERN2_SCAN_END) 
+                    vid_addr <= sprite_pattern_table_addr + 
+                                {sprite_pattern[hc[2:1]][7:2],1'b1, sprite_row[hc[2:1]][3:0]};
 
-                if (hc >= SPRITE_PATTERN_SCAN_END + 2 && hc < SPRITE_PATTERN2_SCAN_END + 2)
-                  sprite_font1[hc[2:1]-1] <= vid_out;
+                  if (hc >= SPRITE_PATTERN_SCAN_END + 2 && hc < SPRITE_PATTERN2_SCAN_END + 2)
+                    sprite_font1[hc[2:1]-1] <= vid_out;
+                end
               end
             end
           end
@@ -467,13 +491,14 @@ module video (
   end
 
   // Set the pixel from highest priority plane 
+  wire [2:0] index = h_flip ? x_scroll_pix : ~x_scroll_pix;
   wire [3:0] pixel_color = sprite_pixel[0] ? sprite_color[0] : 
                            sprite_pixel[1] ? sprite_color[1] :
                            sprite_pixel[2] ? sprite_color[2] :
                            sprite_pixel[3] ? sprite_color[3] : 
                            mode == 0 ? (font_line[~x_pix] ? text_color : back_color) :
                            mode == 3 ? (x_pix < 4 ? font_line[7:4] : font_line[3:0]) :
-                           mode == 4 ? {bit_plane[3][~x_scroll_pix], bit_plane[2][~x_scroll_pix], bit_plane[1][~x_scroll_pix], bit_plane[0][~x_scroll_pix]} :
+                           mode == 4 ? {bit_plane[3][index], bit_plane[2][index], bit_plane[1][index], bit_plane[0][index]} :
                            font_line[~x_pix] ? screen_color[7:4] : screen_color[3:0];
   
   // Set the 24-bit color value, taking border into account
