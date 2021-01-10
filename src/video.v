@@ -49,7 +49,7 @@ module video (
   parameter HT  = HA + HS + HFP + HBP;
   parameter HB = 64;
   parameter HB2 = HB/2;
-  parameter HBadj = 12; // Border adjustment
+  parameter HBadj = 0; // Border adjustment
 
   parameter VA = 480;
   parameter VS  = 2;
@@ -213,10 +213,10 @@ module video (
   wire [2:0] x_scroll_pix = x_pix - x_scroll[2:0];
 
   reg [7:0] r_y_scroll;
-  wire [4:0] ycs = y[7:3] - r_y_scroll[7:3];
+  wire [4:0] ycs = y[7:3] + r_y_scroll[7:3];
   wire [4:0] y_char_scroll = ycs > 24 ? ycs - 24 : ycs;
 
-  wire [2:0] y_scroll_pix = y[2:0] - x_scroll[2:0];
+  wire [2:0] y_scroll_pix = y[2:0] + y_scroll[2:0];
 
   wire [3:0] char_width = (mode == 0 ? 6 : 8);
   wire [4:0] next_char = x_char + 1;
