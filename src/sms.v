@@ -495,8 +495,8 @@ module sms
   reg  r_interrupt_flag, r_sprite_collision;
   reg  r_status_read;
   wire [7:0] status = {r_interrupt_flag, too_many_sprites, r_sprite_collision, (too_many_sprites ? sprite5 : 5'b11111)};
-  wire [7:0] joy_data0 = {~btn[2:1], ~btn[6:3]};
-  wire [7:0] joy_data1 = {~btn[2:1], ~btn[6:3]};
+  wire [7:0] joy_data0 = {~btn[1], ~btn[2], ~btn[6:3]};
+  wire [7:0] joy_data1 = {~btn[1], ~btn[2], ~btn[6:3]};
 
   assign cpuDataIn =  vdp_data_port && n_ioRD == 1'b0 ? vga_dout :
                       vdp_ctrl_port && n_ioRD == 1'b0 ? status :

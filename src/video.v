@@ -207,13 +207,16 @@ module video (
   assign h_counter = x;
 
   // Set the x position as a character and pixel offset. Valid in all modes.
-  reg [5:0] x_char;
+  reg [4:0] x_char;
   reg [2:0] x_pix;
 
   wire [2:0] x_scroll_pix = x_pix - x_scroll[2:0];
 
   reg [7:0] r_y_scroll;
-  wire [4:0] y_char_scroll = y[7:3] - r_y_scroll[7:3];
+  wire [4:0] ycs = y[7:3] - r_y_scroll[7:3];
+  wire [4:0] y_char_scroll = ycs > 24 ? ycs - 24 : ycs;
+
+  wire [2:0] y_scroll_pix = y[2:0] - x_scroll[2:0];
 
   wire [3:0] char_width = (mode == 0 ? 6 : 8);
   wire [4:0] next_char = x_char + 1;
@@ -355,13 +358,13 @@ module video (
             if (mode == 4) begin
               screen_color <= 8'h65;
               if (x_scroll_pix == 0) begin
-                vid_addr <= name_table_addr + {y[7:3], next_scroll, 1'b0};
+                vid_addr <= name_table_addr + {y_char_scroll, next_scroll, 1'b0};
               end else if (x_scroll_pix == 1) begin
                 first_index_byte <= vid_out;
                 vid_addr <= vid_addr + 1;
               end else if (x_scroll_pix == 2) begin
                 second_index_byte <= vid_out;
-                vid_addr <= font_addr + {vid_out[0], first_index_byte, (vid_out[2] ? ~y[2:0] : y[2:0]), 2'b0};
+                vid_addr <= font_addr + {vid_out[0], first_index_byte, (vid_out[2] ? ~y_scroll_pix : y_scroll_pix), 2'b0};
               end else if (x_scroll_pix < 7) begin
                 vid_addr <= vid_addr + 1;
                 bit_plane_next[x_scroll_pix - 3] <= vid_out;
