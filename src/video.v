@@ -502,7 +502,8 @@ module video (
                            font_line[~x_pix] ? screen_color[7:4] : screen_color[3:0];
   
   // Set the 24-bit color value, taking border into account
-  wire [23:0] color = colors1[border ? back_color : pixel_color];
+  wire [3:0] col = border ? back_color : pixel_color;
+  wire [23:0] color = palette ? colors2[col] : colors1[col];
 
   // Set the 8-bit VGA output signals
   assign vga_r = !vga_de ? 8'b0 : color[23:16];
