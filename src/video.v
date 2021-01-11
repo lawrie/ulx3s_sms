@@ -192,19 +192,19 @@ module video (
   reg [2:0] x_pix;
   reg [7:0] r_y_scroll;
 
-  wire [2:0] x_scroll_pix = x_pix - x_scroll[2:0];
+  wire [2:0] x_scroll_pix = x_pix < 16 && disable_horiz ? x_pix : x_pix - x_scroll[2:0];
 
   wire [7:0] depth = (line240 ? 240 : line224 : 224 : 192);
   wire [7:0] y_limit = (lines240 | lines224) ? 255 : 223;
   wire [8:0] ys = y + r_y_scroll;
   wire [7:0] ysa = ys > y_limit ? ys - 224 : ys;
-  wire [4:0] y_char_scroll = ysa[7:3];;
+  wire [4:0] y_char_scroll = x_char >= 24 && disable_vert ? y[7:3] : ysa[7:3];
 
-  wire [2:0] y_scroll_pix = y[2:0] + y_scroll[2:0];
+  wire [2:0] y_scroll_pix = x_char >= 24 && disable_vert ? y[2:0] : y[2:0] + y_scroll[2:0];
 
   wire [3:0] char_width = (mode == 0 ? 6 : 8);
   wire [4:0] next_char = x_char + 1;
-  wire [4:0] next_scroll = next_char - x_scroll[7:3];
+  wire [4:0] next_scroll = x_pix < 16 && disable_horiz ? next_char : next_char - x_scroll[7:3];
 
   reg h_flip, palette, priority;
 
