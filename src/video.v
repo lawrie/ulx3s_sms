@@ -36,6 +36,8 @@ module video (
   input [7:0]   y_scroll,
   input         disable_vert,
   input         disable_horiz,
+  input         lines224,
+  input         lines240,
   output [7:0]  v_counter,
   output [7:0]  h_counter,
   output [15:0] diag
@@ -49,7 +51,7 @@ module video (
   parameter HT  = HA + HS + HFP + HBP;
   parameter HB = 64;
   parameter HB2 = HB/2;
-  parameter HBadj = 0; // Border adjustment
+  parameter HBadj = 12; // Border adjustment
 
   parameter VA = 480;
   parameter VS  = 2;
@@ -209,12 +211,13 @@ module video (
   // Set the x position as a character and pixel offset. Valid in all modes.
   reg [4:0] x_char;
   reg [2:0] x_pix;
+  reg [7:0] r_y_scroll;
 
   wire [2:0] x_scroll_pix = x_pix - x_scroll[2:0];
 
-  reg [7:0] r_y_scroll;
-  wire [4:0] ycs = y[7:3] + r_y_scroll[7:3];
-  wire [4:0] y_char_scroll = ycs > 24 ? ycs - 24 : ycs;
+  wire [7:0] ys = y + r_y_scroll;
+  wire [4:0] ycs = ys[7:3];
+  wire [4:0] y_char_scroll = (lines224 | lines240) ? ycs : ycs > 27 ? ycs - 28 : ycs;
 
   wire [2:0] y_scroll_pix = y[2:0] + y_scroll[2:0];
 

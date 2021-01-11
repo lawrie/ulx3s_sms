@@ -137,9 +137,69 @@ main:
     ld a,$81
     out ($bf),a
 
+
+
     ; Infinite loop to stop program
+    ld a,0
+    ld (xscroll),a
+    ld (yscroll),a
 Loop:
+     in a,$dc
+     bit 3,a        ; right
+     jp nz, CheckLeft
+Loop1:
+     in a,$dc       ; Wait for key released
+     bit 3,a
+     jp z, Loop1
+     ld a,(xscroll)
+     inc a
+Xscroll:
+     ld (xscroll),a
+     out ($bf),a
+     ld a,$88
+     out ($bf),a
      jp Loop
+CheckLeft:
+      in a,$dc
+      bit 2,a
+      jp nz, CheckUp
+Loop2:
+      in a,$dc
+      bit 2,a
+      jp z, Loop2
+      ld a,(xscroll)
+      dec a
+      jp Xscroll
+CheckUp
+       in a,$dc
+       bit 0,a
+       jp nz,CheckDown
+Loop3:
+       in a,$dc
+       bit 0,a
+       jp z, Loop3
+       ld a,(yscroll)
+       inc a
+Yscroll:
+        ld (yscroll),a
+        out ($bf),a
+        ld a,$89
+        out ($bf),a
+        jp Loop
+CheckDown:
+        in a,$dc
+        bit 1,a
+        jp nz, Loop
+Loop4:
+        in a,$dc
+        bit 1,a
+        jp z,Loop4
+        ld a,(yscroll)
+        dec a
+        jp Yscroll
+
+
+
 
 ;==============================================================
 ; Data
@@ -350,4 +410,9 @@ FontData:
 .db $31,$00,$00,$00,$6B,$00,$00,$00,$46,$00,$00,$00,$00,$00,$00,$00
 .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
 FontDataEnd:
+
+.enum $c000 export
+      xscroll db
+      yscroll db
+.ende
 

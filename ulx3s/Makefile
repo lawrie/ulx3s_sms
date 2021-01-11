@@ -5,6 +5,8 @@ VERILOG = ../src/sms.v ../src/ram.v ../src/vram.v ../src/rom.v \
 	  ../src/sn76489.v ../src/tone_generator.v \
 	  ../src/lattice/ecp5pll.sv \
 	  ../src/sdram.v \
+          ../src/spi_display/lcd_video.v \
+          ../src/spi_display/hex_decoder_v.v \
 	  ../src/osd/osd.v ../src/osd/spi_osd.v \
 	  ../src/osd/spi_ram_btn.v ../src/osd/spirw_slave_v.v
 
