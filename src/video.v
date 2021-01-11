@@ -176,27 +176,6 @@ module video (
   // Status interrupt flag
   assign interrupt_flag = (hc == VA);
 
-  // Set horizontal and vertical counters, generate sync signals and
-  // vertical sync interrupt interrupt
-  always @(posedge clk) begin
-    if (reset) begin
-      intCnt <= 1;
-      hc <= 0;
-      vc <= 0;
-    end else begin
-      if (hc == HT - 1) begin
-        hc <= 0;
-        if (vc == VT - 1) begin
-          vc <= 0;
-          r_y_scroll <= y_scroll;
-        end else vc <= vc + 1;
-      end else hc <= hc + 1;
-      if (hc == HA + HFP && vc == VA + VFP && vert_retrace_int) INT <= 1;
-      if (INT) intCnt <= intCnt + 1;
-      if (!intCnt) INT <= 0;
-    end
-  end
-
   assign vga_hs = !(hc >= HA + HFP && hc < HA + HFP + HS);
   assign vga_vs = !(vc >= VA + VFP && vc < VA + VFP + VS);
   assign vga_de = !(hc > HA || vc > VA);
@@ -242,6 +221,27 @@ module video (
   // VRAM
   reg [13:0] vid_addr;
   wire [7:0] vid_out; 
+
+  // Set horizontal and vertical counters, generate sync signals and
+  // vertical sync interrupt interrupt
+  always @(posedge clk) begin
+    if (reset) begin
+      intCnt <= 1;
+      hc <= 0;
+      vc <= 0;
+    end else begin
+      if (hc == HT - 1) begin
+        hc <= 0;
+        if (vc == VT - 1) begin
+          vc <= 0;
+          r_y_scroll <= y_scroll;
+        end else vc <= vc + 1;
+      end else hc <= hc + 1;
+      if (hc == HA + HFP && vc == VA + VFP && vert_retrace_int) INT <= 1;
+      if (INT) intCnt <= intCnt + 1;
+      if (!intCnt) INT <= 0;
+    end
+  end
 
   vram video_ram (
     .clk_a(cpu_clk),

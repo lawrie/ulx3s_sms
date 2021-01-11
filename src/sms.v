@@ -1,7 +1,7 @@
 `default_nettype none
 module sms
 #(
-  parameter c_vga_out     = 0, // 0; Just HDMI, 1: VGA and HDMI
+  parameter c_vga_out     = 1, // 0; Just HDMI, 1: VGA and HDMI
   parameter c_lcd_hex     = 1, // SPI LCD HEX decoder
   parameter c_diag        = 1  // 0: No led diagnostcs, 1: led diagnostics 
 )
@@ -95,9 +95,9 @@ module sms
     genvar i;
     if (c_vga_out) begin
       for(i = 0; i < 4; i = i+1) begin
-        assign gp[10-i] = red[4+i];
+        assign gp[10-i] = blue[4+i];
         assign gn[3-i] = green[4+i];
-        assign gn[10-i] = blue[4+i];
+        assign gn[10-i] = red[4+i];
       end
       assign gp[2] = vSync;
       assign gp[3] = hSync;
