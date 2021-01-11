@@ -194,9 +194,11 @@ module video (
 
   wire [2:0] x_scroll_pix = x_pix - x_scroll[2:0];
 
-  wire [7:0] ys = y + r_y_scroll;
-  wire [4:0] ycs = ys[7:3];
-  wire [4:0] y_char_scroll = (lines224 | lines240) ? ycs : ycs > 27 ? ycs - 28 : ycs;
+  wire [7:0] depth = (line240 ? 240 : line224 : 224 : 192);
+  wire [7:0] y_limit = (lines240 | lines224) ? 255 : 223;
+  wire [8:0] ys = y + r_y_scroll;
+  wire [7:0] ysa = ys > y_limit ? ys - 224 : ys;
+  wire [4:0] y_char_scroll = ysa[7:3];;
 
   wire [2:0] y_scroll_pix = y[2:0] + y_scroll[2:0];
 
