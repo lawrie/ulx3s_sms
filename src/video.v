@@ -1,4 +1,10 @@
 `default_nettype none
+
+// Implementation of the Sega Master System games console for the Ulx3s FPGA board.
+// It uses buttons for joypad 1.
+// Games are via the ESP32 using an On-screen Display (OSD).
+// Has HDMI and optional VGA output.
+// Implemented entirely in Verilog.
 module video (
   input         clk,
   input         reset,
@@ -247,7 +253,7 @@ module video (
   
   reg h_flip, palette, priority;
 
-  wire [3:0] scolor [0:NUM_ACTIVE_SPRITES-1];
+  wire [3:0] sprite_color4 [0:NUM_ACTIVE_SPRITES-1];
   wire [7:0] xa = x - 6;
   wire [2:0] sind = sprite_enlarged ? ~xa[3:1] : ~x[2:0];
   wire [7:0] ya = y - 6;
@@ -265,7 +271,7 @@ module video (
       assign sprite_sy1[j] = sprite_y[j] + 33;
       assign sprite_ey1[j] = sprite_sy1[j] + ((8 << sprite_enlarged) << sprite_large);
       // Mode 4
-      assign scolor[j] = {sprite_font3[j][sind], sprite_font2[j][sind], sprite_font1[j][sind], sprite_font[j][sind]};
+      assign sprite_color4[j] = {sprite_font3[j][sind], sprite_font2[j][sind], sprite_font1[j][sind], sprite_font[j][sind]};
     end
   endgenerate
 
@@ -440,7 +446,7 @@ module video (
                 if (i < num_sprites) begin
                   //if (y + 1 >= sprite_y[i] && y + 1 < sprite_y[i] + 8 + (sprite_enlarged ? 8 : 0)) begin
                     if (x >= sprite_x[i] && x < sprite_x[i] + 8 + (sprite_enlarged ? 8 : 0)) begin
-                      sprite_pixel[i] <= scolor[i] != 0;;
+                      sprite_pixel[i] <= sprite_color4[i] != 0;;
                     end
                   //end
                 end
@@ -570,14 +576,14 @@ module video (
                            mode != 4 && sprite_pixel[1] ? sprite_color[1] :
                            mode != 4 && sprite_pixel[2] ? sprite_color[2] :
                            mode != 4 && sprite_pixel[3] ? sprite_color[3] : 
-                           mode == 4 & sprite_pixel[0] ? scolor[0] :
-                           mode == 4 & sprite_pixel[1] ? scolor[1] :
-                           mode == 4 & sprite_pixel[2] ? scolor[2] :
-                           mode == 4 & sprite_pixel[3] ? scolor[3] :
-                           mode == 4 & sprite_pixel[4] ? scolor[4] :
-                           mode == 4 & sprite_pixel[5] ? scolor[5] :
-                           mode == 4 & sprite_pixel[6] ? scolor[6] :
-                           mode == 4 & sprite_pixel[7] ? scolor[7] :
+                           mode == 4 & sprite_pixel[0] ? sprite_color4[0] :
+                           mode == 4 & sprite_pixel[1] ? sprite_color4[1] :
+                           mode == 4 & sprite_pixel[2] ? sprite_color4[2] :
+                           mode == 4 & sprite_pixel[3] ? sprite_color4[3] :
+                           mode == 4 & sprite_pixel[4] ? sprite_color4[4] :
+                           mode == 4 & sprite_pixel[5] ? sprite_color4[5] :
+                           mode == 4 & sprite_pixel[6] ? sprite_color4[6] :
+                           mode == 4 & sprite_pixel[7] ? sprite_color4[7] :
                            mode == 0 ? (font_line[~x_pix] ? text_color : back_color) :
                            mode == 3 ? (x_pix < 4 ? font_line[7:4] : font_line[3:0]) :
                            mode == 4 ? {bit_plane[3][index], bit_plane[2][index], bit_plane[1][index], bit_plane[0][index]} :
