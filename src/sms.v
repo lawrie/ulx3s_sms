@@ -351,7 +351,7 @@ module sms
   wire [7:0]  line_counter = r_vdp[10];
   wire [15:0] vga_diag;
   reg         r_vga_rd;
-  wire [4:0]  sprite5;
+  wire [4:0]  spritex;
   wire        sprite_collision;
   wire        too_many_sprites;
   wire        interrupt_flag;
@@ -432,7 +432,7 @@ module sms
     .vert_retrace_int(r_vdp[1][5]),
     .sprite_collision(sprite_collision),
     .too_many_sprites(too_many_sprites),
-    .sprite5(sprite5),
+    .spritex(spritex),
     .interrupt_flag(interrupt_flag),
     .x_scroll(x_scroll),
     .y_scroll(y_scroll),
@@ -501,7 +501,7 @@ module sms
 
   reg  r_interrupt_flag, r_sprite_collision;
   reg  r_status_read;
-  wire [7:0] status = {r_interrupt_flag, too_many_sprites, r_sprite_collision, (too_many_sprites ? sprite5 : 5'b11111)};
+  wire [7:0] status = {r_interrupt_flag, too_many_sprites, r_sprite_collision, (too_many_sprites ? spritex : 5'b11111)};
   wire [7:0] joy_data0 = {~R_btn_joy[2:1], ~R_btn_joy[6:3]};
   wire [7:0] joy_data1 = {~R_btn_joy[2:1], ~R_btn_joy[6:3]};
 

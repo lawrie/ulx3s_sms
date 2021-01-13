@@ -31,7 +31,7 @@ module video (
   output        sprite_collision,
   output        too_many_sprites,
   output        interrupt_flag,
-  output [4:0]  sprite5,
+  output [4:0]  spritex,
   input [7:0]   x_scroll,
   input [7:0]   y_scroll,
   input         disable_vert,
@@ -171,7 +171,7 @@ module video (
   // Sprite collision status data
   assign sprite_collision  = (sprite_count > 1);
   assign too_many_sprites = (num_sprites > 8);
-  reg [4:0] sprite5;
+  reg [4:0] spritex;
 
   // Set CPU interrupt flag
   assign n_int = !INT;
@@ -203,6 +203,22 @@ module video (
   wire vBorder = (vc < VB || vc >= VA - VB);
   wire border = hBorder || vBorder;
 
+  // Sprite data for modes 2 and 3
+
+  // Calculate pixel positions for 4 active sprites
+  wire [2:0] sprite_col [0:NUM_ACTIVE_SPRITES-1];
+  wire [3:0] sprite_row [0:NUM_ACTIVE_SPRITES-1];
+
+  // Sprite horizontal positions start at -32, and have range 0 - 287
+  wire [7:0] x1 = x + 1;
+  wire [8:0] x33 = (hc - HB + 66) >> 1; // x+1, starting from -32
+  wire [8:0] x34 = (hc - HB + 68) >> 1; // x+2, starting from -32
+
+  wire [7:0] y32 = y + 32;
+  // Start and end sprite position during sprite scan, starting at x-32
+  wire [7:0] sprite_sy = vid_out + 32;
+  wire [7:0] sprite_ey = vid_out + 32  + ((8 << sprite_enlarged) << sprite_large);
+
   // Mode 4 data
   reg [7:0] first_index_byte;
   reg [7:0] second_index_byte;
@@ -223,26 +239,13 @@ module video (
   
   reg h_flip, palette, priority;
 
-  // Calculate pixel positions for 4 active sprites
-  wire [2:0] sprite_col [0:NUM_ACTIVE_SPRITES-1];
-  wire [3:0] sprite_row [0:NUM_ACTIVE_SPRITES-1];
-
-  // Sprite horizontal positions start at -32, and have range 0 - 287
-  wire [7:0] x1 = x + 1;
-  wire [8:0] x33 = (hc - HB + 66) >> 1; // x+1, starting from -32
-  wire [8:0] x34 = (hc - HB + 68) >> 1; // x+2, starting from -32
-
-  wire [7:0] y32 = y + 32;
-  // Start and end sprite position during sprite scan, starting at x-32
-  wire [7:0] sprite_sy = vid_out + 32;
-  wire [7:0] sprite_ey = vid_out + 32  + ((8 << sprite_enlarged) << sprite_large);
-
   wire [3:0] scolor [0:NUM_ACTIVE_SPRITES-1];
   wire [7:0] xa = x - 6;
   wire [2:0] sind = sprite_enlarged ? ~xa[3:1] : ~x[2:0];
   wire [7:0] ya = y - 6;
   wire [2:0] ysp = sprite_enlarged ? ya[3:1] : y[2:0];
 
+  // Generate sprite arrays
   generate
     genvar j;
     for(j=0;j<NUM_ACTIVE_SPRITES;j=j+1) begin
@@ -253,6 +256,7 @@ module video (
       assign sprite_exl[j] = sprite_sx[j] + ((8 << sprite_enlarged) << sprite_large);
       assign sprite_sy1[j] = sprite_y[j] + 33;
       assign sprite_ey1[j] = sprite_sy1[j] + ((8 << sprite_enlarged) << sprite_large);
+      // Mode 4
       assign scolor[j] = {sprite_font3[j][sind], sprite_font2[j][sind], sprite_font1[j][sind], sprite_font[j][sind]};
     end
   endgenerate
@@ -294,7 +298,7 @@ module video (
     .dout_b(vid_out)
   );
 
-  // Set the palettes
+  // Set the palettes for mode 4
   always @(posedge cpu_clk) begin
     if (vga_wr && cram_selected) begin
       if (vga_addr < 16) begin
@@ -305,7 +309,7 @@ module video (
     end
   end
 
-  // Calculate x_char and x_pix
+  // Calculate x_char and x_pix for mode 0
   always @(posedge clk) begin
     if (hc[0] == 1) begin
       x_pix <= x_pix + 1;
@@ -438,7 +442,7 @@ module video (
             if (hc == HA - 1 && vc[0] == 1) begin
               num_sprites <= 0;
               sprites_done <= 0;
-              sprite5 <= 5'h1f;
+              spritex <= 5'h1f;
             end
           // End of active area, fetch data for next line
           end else begin // Read sprite attributes and patterns
@@ -503,7 +507,7 @@ module video (
                        sprite_num[num_sprites] <= hc[5:1] - 1;
                        num_sprites <= num_sprites + 1;
                      end else begin
-                       sprite5 <= hc[5:1] - 1;
+                       spritex <= hc[5:1] - 1;
                        sprites_done <= 1;
                      end
                   end
@@ -553,6 +557,7 @@ module video (
   // Set the pixel from highest priority plane 
   wire [2:0] index = h_flip ? x_scroll_pix : ~x_scroll_pix;
 
+  // Pixel priority
   wire [3:0] pixel_color = mode != 4 && sprite_pixel[0] ? sprite_color[0] : 
                            mode != 4 && sprite_pixel[1] ? sprite_color[1] :
                            mode != 4 && sprite_pixel[2] ? sprite_color[2] :
@@ -584,6 +589,7 @@ module video (
   assign vga_g = !vga_de ? 8'b0 : color[15:8];
   assign vga_b = !vga_de ? 8'b0 : color[7:0];
 
+  // LED diagnostics
   always @(posedge clk) diag = {sprite_font1[0], sprite_font2[0]};
 
 endmodule
