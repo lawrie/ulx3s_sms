@@ -40,7 +40,7 @@ module video (
   input         lines240,
   output [7:0]  v_counter,
   output [7:0]  h_counter,
-  output [15:0] diag
+  output reg [15:0] diag
 );
 
   // VGA output parameters for 60hz 640x480
@@ -61,7 +61,7 @@ module video (
   parameter VB = 48;
   parameter VB2 = VB/2;
 
-  localparam NUM_SPRITES = 32;
+  localparam NUM_SPRITES = 16;
   localparam NUM_SPRITES2 = NUM_SPRITES * 2;
   localparam NUM_ACTIVE_SPRITES = 8;
   localparam NUM_ACTIVE_SPRITES2 = NUM_ACTIVE_SPRITES * 2;
@@ -142,6 +142,8 @@ module video (
   reg [7:0] sprite_line [0:NUM_ACTIVE_SPRITES-1];
   reg [7:0] sprite_font [0:NUM_ACTIVE_SPRITES-1];
   reg [7:0] sprite_font1 [0:NUM_ACTIVE_SPRITES-1];
+  reg [7:0] sprite_font2 [0:NUM_ACTIVE_SPRITES-1];
+  reg [7:0] sprite_font3 [0:NUM_ACTIVE_SPRITES-1];
 
   reg [9:0] hc = 0;
   reg [9:0] vc = 0;
@@ -152,9 +154,9 @@ module video (
   reg [7:0] r_char;
   reg [7:0] font_line;
   
-  reg [3:0] sprite_pixel;
+  reg [7:0] sprite_pixel;
   reg       sprites_done;
-  reg [2:0] num_sprites;
+  reg [3:0] num_sprites;
 
   wire [7:0] sprite_sy1 [0:NUM_ACTIVE_SPRITES+1]; // Start y pos + 1
   wire [7:0] sprite_ey1 [0:NUM_ACTIVE_SPRITES+1]; // End y pos + 1
@@ -168,7 +170,7 @@ module video (
 
   // Sprite collision status data
   assign sprite_collision  = (sprite_count > 1);
-  assign too_many_sprites = (num_sprites > 4);
+  assign too_many_sprites = (num_sprites > 8);
   reg [4:0] sprite5;
 
   // Set CPU interrupt flag
@@ -257,6 +259,7 @@ module video (
     .dout_b(vid_out)
   );
 
+  // Set the palettes
   always @(posedge cpu_clk) begin
     if (vga_wr && cram_selected) begin
       if (vga_addr < 16) begin
@@ -281,6 +284,10 @@ module video (
   wire [7:0] sprite_sy = vid_out + 32;
   wire [7:0] sprite_ey = vid_out + 32  + ((8 << sprite_enlarged) << sprite_large);
 
+  wire [3:0] scol [0:NUM_ACTIVE_SPRITES-1];
+  wire [2:0] sind = sprite_enlarged ? ~x[3:1] : ~x[2:0];
+  wire [2:0] ysp = sprite_enlarged ? y[3:1] : y[2:0];
+
   generate
     genvar j;
     for(j=0;j<NUM_ACTIVE_SPRITES;j=j+1) begin
@@ -291,6 +298,7 @@ module video (
       assign sprite_exl[j] = sprite_sx[j] + ((8 << sprite_enlarged) << sprite_large);
       assign sprite_sy1[j] = sprite_y[j] + 33;
       assign sprite_ey1[j] = sprite_sy1[j] + ((8 << sprite_enlarged) << sprite_large);
+      assign scol[j] = {sprite_font3[j][sind], sprite_font2[j][sind], sprite_font1[j][sind], sprite_font[j][sind]};
     end
   endgenerate
 
@@ -399,16 +407,28 @@ module video (
             end
             // Position the sprites
             sprite_pixel <= 0;
-            for(i=0;i<NUM_ACTIVE_SPRITES;i=i+1) if (i < num_sprites) begin
-              // Set the sprite fonts
-              if (x34 == sprite_sx[i])
-                sprite_line[i] <= sprite_font[i];
-              if (sprite_large && x34 == sprite_ex[i])
-                sprite_line[i] <= sprite_font1[i];
-              // Look for up to 4 sprites on the current line
-              if (y32 >= sprite_sy1[i] && y32 < sprite_ey1[i]) begin
-                if (x33 >= sprite_sx[i] && x33 < sprite_exl[i])
-                  sprite_pixel[i] <= (sprite_line[i][~sprite_col[i]]);
+            if (mode != 4) begin
+              for(i=0;i<NUM_ACTIVE_SPRITES;i=i+1) if (i < num_sprites) begin
+                // Set the sprite fonts
+                if (x34 == sprite_sx[i])
+                  sprite_line[i] <= sprite_font[i];
+                if (sprite_large && x34 == sprite_ex[i])
+                  sprite_line[i] <= sprite_font1[i];
+                // Look for up to 4 sprites on the current line
+                if (y32 >= sprite_sy1[i] && y32 < sprite_ey1[i]) begin
+                  if (x33 >= sprite_sx[i] && x33 < sprite_exl[i])
+                    sprite_pixel[i] <= (sprite_line[i][~sprite_col[i]]);
+                end
+              end 
+            end else begin
+              for(i=0;i<NUM_ACTIVE_SPRITES;i=i+1) begin
+                if (i < num_sprites) begin
+                  //if (y + 1 >= sprite_y[i] && y + 1 < sprite_y[i] + 8 + (sprite_enlarged ? 8 : 0)) begin
+                    if (x >= sprite_x[i] && x < sprite_x[i] + 8 + (sprite_enlarged ? 8 : 0)) begin
+                      sprite_pixel[i] <= 1;
+                    end
+                  //end
+                end
               end
             end
             // Initialisation for sprite scan
@@ -426,16 +446,45 @@ module video (
                 end
                 if (hc >= HA + 2 && hc < SPRITE_SCAN_END + 2 && !sprites_done) begin
                   if (vid_out == 208) sprites_done <= 1;
-                  else if (y32 >= sprite_sy && y32 < sprite_ey) begin
+                  else if (y >= vid_out && y < vid_out + 8 + (sprite_enlarged ? 8 : 0)) begin
                     if (num_sprites < NUM_ACTIVE_SPRITES) begin
                       sprite_num[num_sprites] <= hc[6:1] - 1;
+                      sprite_y[num_sprites] <= vid_out;
                       num_sprites <= num_sprites + 1;
                     end else begin
                       sprites_done <= 1;
                     end
                   end
                 end
+                // Read the sprite x values for the row
+                if (hc >= SPRITE_SCAN_END && hc < SPRITE_SCAN_END + 16) 
+                  vid_addr <= sprite_attr_addr + 128 + {sprite_num[hc[3:1]], 1'b0};
+                if (hc >= SPRITE_SCAN_END + 2 && hc < SPRITE_SCAN_END + 18)
+                  sprite_x[hc[3:1] - 1] <= vid_out;
+                // Read the pattern number values for the row
+                if (hc >= SPRITE_SCAN_END + 16 && hc < SPRITE_SCAN_END + 32) 
+                  vid_addr <= sprite_attr_addr + 128 + {sprite_num[hc[3:1]], 1'b1};
+                if (hc >= SPRITE_SCAN_END + 18 && hc < SPRITE_SCAN_END + 34)
+                  sprite_pattern[hc[3:1] - 1] <= vid_out;
+                // Read the sprite bit planes for the row
+                if (hc >= SPRITE_SCAN_END + 32 && hc < SPRITE_SCAN_END + 48)
+                    vid_addr <= sprite_pattern_table_addr + {sprite_pattern[sprite_num[hc[3:1]]], ysp, 2'b00};
+                if (hc >= SPRITE_SCAN_END + 34 && hc < SPRITE_SCAN_END + 50)
+                    sprite_font[hc[3:1] - 1] <= vid_out;
+                if (hc >= SPRITE_SCAN_END + 48 && hc < SPRITE_SCAN_END + 64)
+                    vid_addr <= sprite_pattern_table_addr + {sprite_pattern[sprite_num[hc[3:1]]], ysp, 2'b01};
+                if (hc >= SPRITE_SCAN_END + 50 && hc < SPRITE_SCAN_END + 66)
+                    sprite_font1[hc[3:1] - 1] <= vid_out;
+                if (hc >= SPRITE_SCAN_END + 64 && hc < SPRITE_SCAN_END + 80)
+                    vid_addr <= sprite_pattern_table_addr + {sprite_pattern[sprite_num[hc[3:1]]], ysp, 2'b10};
+                if (hc >= SPRITE_SCAN_END + 66 && hc < SPRITE_SCAN_END + 82)
+                    sprite_font2[hc[3:1] - 1] <= vid_out;
+                if (hc >= SPRITE_SCAN_END + 80 && hc < SPRITE_SCAN_END + 96)
+                    vid_addr <= sprite_pattern_table_addr + {sprite_pattern[sprite_num[hc[3:1]]], ysp, 2'b11};
+                if (hc >= SPRITE_SCAN_END + 82 && hc < SPRITE_SCAN_END + 98)
+                    sprite_font3[hc[3:1] - 1] <= vid_out;
               end
+
             end else begin
               // Look at up to 32 sprites
               if (vc[0] == 1) begin
@@ -500,10 +549,16 @@ module video (
 
   // Set the pixel from highest priority plane 
   wire [2:0] index = h_flip ? x_scroll_pix : ~x_scroll_pix;
-  wire [3:0] pixel_color = sprite_pixel[0] ? sprite_color[0] : 
-                           sprite_pixel[1] ? sprite_color[1] :
-                           sprite_pixel[2] ? sprite_color[2] :
-                           sprite_pixel[3] ? sprite_color[3] : 
+
+  wire [3:0] pixel_color = mode != 4 && sprite_pixel[0] ? sprite_color[0] : 
+                           mode != 4 && sprite_pixel[1] ? sprite_color[1] :
+                           mode != 4 && sprite_pixel[2] ? sprite_color[2] :
+                           mode != 4 && sprite_pixel[3] ? sprite_color[3] : 
+                           mode == 4 & sprite_pixel[0] && scol[0] != 0 ? scol[0] :
+                           mode == 4 & sprite_pixel[1] && scol[1] != 0 ? scol[1] :
+                           mode == 4 & sprite_pixel[2] && scol[2] != 0 ? scol[2] :
+                           mode == 4 & sprite_pixel[3] && scol[3] != 0 ? scol[3] :
+                           mode == 4 & sprite_pixel[4] && scol[4] != 0 ? scol[4] :
                            mode == 0 ? (font_line[~x_pix] ? text_color : back_color) :
                            mode == 3 ? (x_pix < 4 ? font_line[7:4] : font_line[3:0]) :
                            mode == 4 ? {bit_plane[3][index], bit_plane[2][index], bit_plane[1][index], bit_plane[0][index]} :
@@ -511,13 +566,13 @@ module video (
   
   // Set the 24-bit color value, taking border into account
   wire [3:0] col = border ? back_color : pixel_color;
-  wire [23:0] color = palette ? colors2[col] : colors1[col];
+  wire [23:0] color = palette || border || sprite_pixel != 0 ? colors2[col] : colors1[col];
 
   // Set the 8-bit VGA output signals
   assign vga_r = !vga_de ? 8'b0 : color[23:16];
   assign vga_g = !vga_de ? 8'b0 : color[15:8];
   assign vga_b = !vga_de ? 8'b0 : color[7:0];
 
-  assign diag = {first_index_byte, second_index_byte};
+  always @(posedge clk) diag = {sprite_font1[0], sprite_font2[0]};
 
 endmodule

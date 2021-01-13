@@ -1,7 +1,7 @@
 `default_nettype none
 module sms
 #(
-  parameter c_vga_out     = 1, // 0; Just HDMI, 1: VGA and HDMI
+  parameter c_vga_out     = 0, // 0; Just HDMI, 1: VGA and HDMI
   parameter c_lcd_hex     = 1, // SPI LCD HEX decoder
   parameter c_diag        = 1  // 0: No led diagnostcs, 1: led diagnostics 
 )
@@ -17,8 +17,6 @@ module sms
   // Keyboard
   output        usb_fpga_pu_dp,
   output        usb_fpga_pu_dn,
-  inout         ps2Clk,
-  inout         ps2Data,
   // Audio
   output [3:0]  audio_l,
   output [3:0]  audio_r,
@@ -504,8 +502,8 @@ module sms
   reg  r_interrupt_flag, r_sprite_collision;
   reg  r_status_read;
   wire [7:0] status = {r_interrupt_flag, too_many_sprites, r_sprite_collision, (too_many_sprites ? sprite5 : 5'b11111)};
-  wire [7:0] joy_data0 = {~R_btn_joy[1], ~R_btn_joy[2], ~R_btn_joy[6:3]};
-  wire [7:0] joy_data1 = {~R_btn_joy[1], ~R_btn_joy[2], ~R_btn_joy[6:3]};
+  wire [7:0] joy_data0 = {~R_btn_joy[2:1], ~R_btn_joy[6:3]};
+  wire [7:0] joy_data1 = {~R_btn_joy[2:1], ~R_btn_joy[6:3]};
 
   assign cpuDataIn =  vdp_data_port && n_ioRD == 1'b0 ? vga_dout :
                       vdp_ctrl_port && n_ioRD == 1'b0 ? status :
@@ -645,6 +643,6 @@ module sms
   // ===============================================================
   assign led = {pc[15:14], !n_hard_reset, mode};
 
-  always @(posedge cpuClock) diag16 <= {r_vdp[0], r_vdp[1]};;
+  always @(posedge cpuClock) diag16 <= vga_diag;
 
 endmodule
