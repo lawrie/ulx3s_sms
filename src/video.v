@@ -192,23 +192,10 @@ module video (
   // Set the x position as a character and pixel offset. Valid in all modes.
   reg [4:0] x_char;
   reg [2:0] x_pix;
-  reg [7:0] r_y_scroll;
-
-  wire [2:0] x_scroll_pix = x_pix < 16 && disable_horiz ? x_pix : x_pix - x_scroll[2:0];
-
-  wire [7:0] depth = (line240 ? 240 : line224 : 224 : 192);
-  wire [7:0] y_limit = (lines240 | lines224) ? 255 : 223;
-  wire [8:0] ys = y + r_y_scroll;
-  wire [7:0] ysa = ys > y_limit ? ys - 224 : ys;
-  wire [4:0] y_char_scroll = x_char >= 24 && disable_vert ? y[7:3] : ysa[7:3];
-
-  wire [2:0] y_scroll_pix = x_char >= 24 && disable_vert ? y[2:0] : y[2:0] + y_scroll[2:0];
 
   wire [3:0] char_width = (mode == 0 ? 6 : 8);
   wire [4:0] next_char = x_char + 1;
   wire [4:0] next_scroll = x_pix < 16 && disable_horiz ? next_char : next_char - x_scroll[7:3];
-
-  reg h_flip, palette, priority;
 
   // Calculate the border
   wire [9:0] hb_adj = (mode == 0 ? HBadj : 0);
@@ -221,6 +208,54 @@ module video (
   reg [7:0] second_index_byte;
   reg [7:0] bit_plane [0:3];
   reg [7:0] bit_plane_next [0:3];
+
+  reg [7:0] r_y_scroll;
+
+  wire [2:0] x_scroll_pix = x_pix < 16 && disable_horiz ? x_pix : x_pix - x_scroll[2:0];
+
+  wire [7:0] depth = (line240 ? 240 : line224 : 224 : 192);
+  wire [7:0] y_limit = (lines240 | lines224) ? 255 : 223;
+  wire [8:0] ys = y + r_y_scroll;
+  wire [7:0] ysa = ys > y_limit ? ys - 224 : ys;
+  wire [4:0] y_char_scroll = x_char >= 24 && disable_vert ? y[7:3] : ysa[7:3];
+
+  wire [2:0] y_scroll_pix = x_char >= 24 && disable_vert ? y[2:0] : y[2:0] + y_scroll[2:0];
+  
+  reg h_flip, palette, priority;
+
+  // Calculate pixel positions for 4 active sprites
+  wire [2:0] sprite_col [0:NUM_ACTIVE_SPRITES-1];
+  wire [3:0] sprite_row [0:NUM_ACTIVE_SPRITES-1];
+
+  // Sprite horizontal positions start at -32, and have range 0 - 287
+  wire [7:0] x1 = x + 1;
+  wire [8:0] x33 = (hc - HB + 66) >> 1; // x+1, starting from -32
+  wire [8:0] x34 = (hc - HB + 68) >> 1; // x+2, starting from -32
+
+  wire [7:0] y32 = y + 32;
+  // Start and end sprite position during sprite scan, starting at x-32
+  wire [7:0] sprite_sy = vid_out + 32;
+  wire [7:0] sprite_ey = vid_out + 32  + ((8 << sprite_enlarged) << sprite_large);
+
+  wire [3:0] scolor [0:NUM_ACTIVE_SPRITES-1];
+  wire [7:0] xa = x - 6;
+  wire [2:0] sind = sprite_enlarged ? ~xa[3:1] : ~x[2:0];
+  wire [7:0] ya = y - 6;
+  wire [2:0] ysp = sprite_enlarged ? ya[3:1] : y[2:0];
+
+  generate
+    genvar j;
+    for(j=0;j<NUM_ACTIVE_SPRITES;j=j+1) begin
+      assign sprite_col[j] = ((x1 - sprite_x[j]) >> sprite_enlarged);
+      assign sprite_row[j] = ((y - sprite_y[j]) >> sprite_enlarged);
+      assign sprite_sx[j]  = sprite_x[j] + (sprite_ec[j] ? 0 : 32);
+      assign sprite_ex[j]  = sprite_sx[j] + (8 << sprite_enlarged);
+      assign sprite_exl[j] = sprite_sx[j] + ((8 << sprite_enlarged) << sprite_large);
+      assign sprite_sy1[j] = sprite_y[j] + 33;
+      assign sprite_ey1[j] = sprite_sy1[j] + ((8 << sprite_enlarged) << sprite_large);
+      assign scolor[j] = {sprite_font3[j][sind], sprite_font2[j][sind], sprite_font1[j][sind], sprite_font[j][sind]};
+    end
+  endgenerate
 
   // VRAM
   reg [13:0] vid_addr;
@@ -269,40 +304,6 @@ module video (
       end
     end
   end
-
-  // Calculate pixel positions for 4 active sprites
-  wire [2:0] sprite_col [0:NUM_ACTIVE_SPRITES-1];
-  wire [3:0] sprite_row [0:NUM_ACTIVE_SPRITES-1];
-
-  // Sprite horizontal positions start at -32, and have range 0 - 287
-  wire [7:0] x1 = x + 1;
-  wire [8:0] x33 = (hc - HB + 66) >> 1; // x+1, starting from -32
-  wire [8:0] x34 = (hc - HB + 68) >> 1; // x+2, starting from -32
-
-  wire [7:0] y32 = y + 32;
-  // Start and end sprite position during sprite scan, starting at x-32
-  wire [7:0] sprite_sy = vid_out + 32;
-  wire [7:0] sprite_ey = vid_out + 32  + ((8 << sprite_enlarged) << sprite_large);
-
-  wire [3:0] scol [0:NUM_ACTIVE_SPRITES-1];
-  wire [7:0] xa = x - 6;
-  wire [2:0] sind = sprite_enlarged ? ~xa[3:1] : ~x[2:0];
-  wire [7:0] ya = y - 6;
-  wire [2:0] ysp = sprite_enlarged ? ya[3:1] : y[2:0];
-
-  generate
-    genvar j;
-    for(j=0;j<NUM_ACTIVE_SPRITES;j=j+1) begin
-      assign sprite_col[j] = ((x1 - sprite_x[j]) >> sprite_enlarged);
-      assign sprite_row[j] = ((y - sprite_y[j]) >> sprite_enlarged);
-      assign sprite_sx[j]  = sprite_x[j] + (sprite_ec[j] ? 0 : 32);
-      assign sprite_ex[j]  = sprite_sx[j] + (8 << sprite_enlarged);
-      assign sprite_exl[j] = sprite_sx[j] + ((8 << sprite_enlarged) << sprite_large);
-      assign sprite_sy1[j] = sprite_y[j] + 33;
-      assign sprite_ey1[j] = sprite_sy1[j] + ((8 << sprite_enlarged) << sprite_large);
-      assign scol[j] = {sprite_font3[j][sind], sprite_font2[j][sind], sprite_font1[j][sind], sprite_font[j][sind]};
-    end
-  endgenerate
 
   // Calculate x_char and x_pix
   always @(posedge clk) begin
@@ -556,22 +557,22 @@ module video (
                            mode != 4 && sprite_pixel[1] ? sprite_color[1] :
                            mode != 4 && sprite_pixel[2] ? sprite_color[2] :
                            mode != 4 && sprite_pixel[3] ? sprite_color[3] : 
-                           mode == 4 & sprite_pixel[0] && scol[0] != 0 ? scol[0] :
-                           mode == 4 & sprite_pixel[1] && scol[1] != 0 ? scol[1] :
-                           mode == 4 & sprite_pixel[2] && scol[2] != 0 ? scol[2] :
-                           mode == 4 & sprite_pixel[3] && scol[3] != 0 ? scol[3] :
-                           mode == 4 & sprite_pixel[4] && scol[4] != 0 ? scol[4] :
+                           mode == 4 & sprite_pixel[0] && scolor[0] != 0 ? scolor[0] :
+                           mode == 4 & sprite_pixel[1] && scolor[1] != 0 ? scolor[1] :
+                           mode == 4 & sprite_pixel[2] && scolor[2] != 0 ? scolor[2] :
+                           mode == 4 & sprite_pixel[3] && scolor[3] != 0 ? scolor[3] :
+                           mode == 4 & sprite_pixel[4] && scolor[4] != 0 ? scolor[4] :
                            mode == 0 ? (font_line[~x_pix] ? text_color : back_color) :
                            mode == 3 ? (x_pix < 4 ? font_line[7:4] : font_line[3:0]) :
                            mode == 4 ? {bit_plane[3][index], bit_plane[2][index], bit_plane[1][index], bit_plane[0][index]} :
                            font_line[~x_pix] ? screen_color[7:4] : screen_color[3:0];
 
   wire sprite_active = mode == 4 && (
-                                     (sprite_pixel[0] && scol[0] != 0) ||
-                                     (sprite_pixel[1] && scol[1] != 0) ||
-                                     (sprite_pixel[2] && scol[2] != 0) ||
-                                     (sprite_pixel[3] && scol[3] != 0) ||
-                                     (sprite_pixel[4] && scol[4] != 0));
+                                     (sprite_pixel[0] && scolor[0] != 0) ||
+                                     (sprite_pixel[1] && scolor[1] != 0) ||
+                                     (sprite_pixel[2] && scolor[2] != 0) ||
+                                     (sprite_pixel[3] && scolor[3] != 0) ||
+                                     (sprite_pixel[4] && scolor[4] != 0));
 
   
   // Set the 24-bit color value, taking border into account
