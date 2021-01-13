@@ -61,9 +61,10 @@ module video (
   parameter VB = 48;
   parameter VB2 = VB/2;
 
-  localparam NUM_SPRITES = 16;
+  localparam NUM_SPRITES = 32;
   localparam NUM_SPRITES2 = NUM_SPRITES * 2;
   localparam NUM_ACTIVE_SPRITES = 8;
+  localparam NUM_ACTIVE_LEGACY_SPRITES = 4;
   localparam NUM_ACTIVE_SPRITES2 = NUM_ACTIVE_SPRITES * 2;
   localparam NUM_ACTIVE_SPRITES8 = NUM_ACTIVE_SPRITES * 8;
 
@@ -90,6 +91,7 @@ module video (
   localparam gray         = 24'h777777;
   localparam white        = 24'hffffff;
 
+  // Palettes
   reg [23:0] colors1 [0:15];
   reg [23:0] colors2 [0:15];
 
@@ -133,6 +135,7 @@ module video (
   reg [7:0] screen_color;
   reg [7:0] screen_color_next;
 
+  // Legacy modes only support 4 sprites, mode 4 supports 8
   reg [7:0] sprite_y [0:NUM_ACTIVE_SPRITES-1];
   reg [7:0] sprite_x [0:NUM_ACTIVE_SPRITES-1];
   reg [3:0] sprite_color [0:NUM_ACTIVE_SPRITES-1];
@@ -140,6 +143,8 @@ module video (
   reg [NUM_ACTIVE_SPRITES-1:0] sprite_ec;
   reg [4:0] sprite_num [0:NUM_ACTIVE_SPRITES-1];
   reg [7:0] sprite_line [0:NUM_ACTIVE_SPRITES-1];
+
+  // Fonts are used differently for mode 4, as there are 4 bit planes
   reg [7:0] sprite_font [0:NUM_ACTIVE_SPRITES-1];
   reg [7:0] sprite_font1 [0:NUM_ACTIVE_SPRITES-1];
   reg [7:0] sprite_font2 [0:NUM_ACTIVE_SPRITES-1];
@@ -165,7 +170,10 @@ module video (
   wire [8:0] sprite_exl [0:NUM_ACTIVE_SPRITES+1]; // End y pos
 
   // Sprite collision count
-  wire [2:0] sprite_count = sprite_pixel[3] + sprite_pixel[2] + 
+  wire [3:0] sprite_count = 
+             sprite_pixel[7] + sprite_pixel[6] + 
+             sprite_pixel[5] + sprite_pixel[4] + 
+             sprite_pixel[3] + sprite_pixel[2] + 
              sprite_pixel[1] + sprite_pixel[0];
 
   // Sprite collision status data
@@ -432,7 +440,7 @@ module video (
                 if (i < num_sprites) begin
                   //if (y + 1 >= sprite_y[i] && y + 1 < sprite_y[i] + 8 + (sprite_enlarged ? 8 : 0)) begin
                     if (x >= sprite_x[i] && x < sprite_x[i] + 8 + (sprite_enlarged ? 8 : 0)) begin
-                      sprite_pixel[i] <= 1;
+                      sprite_pixel[i] <= scolor[i] != 0;;
                     end
                   //end
                 end
@@ -562,27 +570,22 @@ module video (
                            mode != 4 && sprite_pixel[1] ? sprite_color[1] :
                            mode != 4 && sprite_pixel[2] ? sprite_color[2] :
                            mode != 4 && sprite_pixel[3] ? sprite_color[3] : 
-                           mode == 4 & sprite_pixel[0] && scolor[0] != 0 ? scolor[0] :
-                           mode == 4 & sprite_pixel[1] && scolor[1] != 0 ? scolor[1] :
-                           mode == 4 & sprite_pixel[2] && scolor[2] != 0 ? scolor[2] :
-                           mode == 4 & sprite_pixel[3] && scolor[3] != 0 ? scolor[3] :
-                           mode == 4 & sprite_pixel[4] && scolor[4] != 0 ? scolor[4] :
+                           mode == 4 & sprite_pixel[0] ? scolor[0] :
+                           mode == 4 & sprite_pixel[1] ? scolor[1] :
+                           mode == 4 & sprite_pixel[2] ? scolor[2] :
+                           mode == 4 & sprite_pixel[3] ? scolor[3] :
+                           mode == 4 & sprite_pixel[4] ? scolor[4] :
+                           mode == 4 & sprite_pixel[5] ? scolor[5] :
+                           mode == 4 & sprite_pixel[6] ? scolor[6] :
+                           mode == 4 & sprite_pixel[7] ? scolor[7] :
                            mode == 0 ? (font_line[~x_pix] ? text_color : back_color) :
                            mode == 3 ? (x_pix < 4 ? font_line[7:4] : font_line[3:0]) :
                            mode == 4 ? {bit_plane[3][index], bit_plane[2][index], bit_plane[1][index], bit_plane[0][index]} :
                            font_line[~x_pix] ? screen_color[7:4] : screen_color[3:0];
 
-  wire sprite_active = mode == 4 && (
-                                     (sprite_pixel[0] && scolor[0] != 0) ||
-                                     (sprite_pixel[1] && scolor[1] != 0) ||
-                                     (sprite_pixel[2] && scolor[2] != 0) ||
-                                     (sprite_pixel[3] && scolor[3] != 0) ||
-                                     (sprite_pixel[4] && scolor[4] != 0));
-
-  
   // Set the 24-bit color value, taking border into account
   wire [3:0] col = border ? back_color : pixel_color;
-  wire [23:0] color = palette || sprite_active || border ? colors2[col] : colors1[col];
+  wire [23:0] color = palette || sprite_pixel != 0 || border ? colors2[col] : colors1[col];
 
   // Set the 8-bit VGA output signals
   assign vga_r = !vga_de ? 8'b0 : color[23:16];
