@@ -254,10 +254,10 @@ module video (
   reg h_flip, palette, back_priority;
 
   wire [3:0] sprite_color4 [0:NUM_ACTIVE_SPRITES-1];
-  wire [7:0] xa = x - 6;
-  wire [2:0] sind = sprite_enlarged ? ~xa[3:1] : ~x[2:0];
-  wire [7:0] ya = y - 6;
-  wire [2:0] ysp = sprite_enlarged ? ya[3:1] : y[2:0];
+  wire [7:0] sprite_y_offset [0:NUM_ACTIVE_SPRITES-1];
+  wire [2:0] sprite_y_line [0:NUM_ACTIVE_SPRITES-1];
+  wire [7:0] sprite_x_offset [0:NUM_ACTIVE_SPRITES-1];
+  wire [2:0] sprite_x_col [0:NUM_ACTIVE_SPRITES-1];
 
   // Generate sprite arrays
   generate
@@ -271,7 +271,11 @@ module video (
       assign sprite_sy1[j] = sprite_y[j] + 33;
       assign sprite_ey1[j] = sprite_sy1[j] + ((8 << sprite_enlarged) << sprite_large);
       // Mode 4
-      assign sprite_color4[j] = {sprite_font3[j][sind], sprite_font2[j][sind], sprite_font1[j][sind], sprite_font[j][sind]};
+      assign sprite_y_offset[j] = y - sprite_y[j];
+      assign sprite_y_line[j] = sprite_enlarged ? sprite_y_offset[j][3:1] : sprite_y_offset[j][2:0];
+      assign sprite_x_offset[j] = x - sprite_x[j];
+      assign sprite_x_col[j] = sprite_enlarged ? ~sprite_x_offset[j][3:1] : ~sprite_x_offset[j][2:0];
+      assign sprite_color4[j] = {sprite_font3[j][sprite_x_col[j]], sprite_font2[j][sprite_x_col[j]], sprite_font1[j][sprite_x_col[j]], sprite_font[j][sprite_x_col[j]]};
     end
   endgenerate
 
@@ -489,19 +493,19 @@ module video (
                   sprite_pattern[hc[3:1] - 1] <= vid_out;
                 // Read the sprite bit planes for the row
                 if (hc >= SPRITE_SCAN_END + 32 && hc < SPRITE_SCAN_END + 48)
-                    vid_addr <= sprite_pattern_table_addr + {sprite_pattern[sprite_num[hc[3:1]]], ysp, 2'b00};
+                    vid_addr <= sprite_pattern_table_addr + {sprite_pattern[sprite_num[hc[3:1]]], sprite_y_line[hc[3:1]], 2'b00};
                 if (hc >= SPRITE_SCAN_END + 34 && hc < SPRITE_SCAN_END + 50)
                     sprite_font[hc[3:1] - 1] <= vid_out;
                 if (hc >= SPRITE_SCAN_END + 48 && hc < SPRITE_SCAN_END + 64)
-                    vid_addr <= sprite_pattern_table_addr + {sprite_pattern[sprite_num[hc[3:1]]], ysp, 2'b01};
+                    vid_addr <= sprite_pattern_table_addr + {sprite_pattern[sprite_num[hc[3:1]]], sprite_y_line[hc[3:1]], 2'b01};
                 if (hc >= SPRITE_SCAN_END + 50 && hc < SPRITE_SCAN_END + 66)
                     sprite_font1[hc[3:1] - 1] <= vid_out;
                 if (hc >= SPRITE_SCAN_END + 64 && hc < SPRITE_SCAN_END + 80)
-                    vid_addr <= sprite_pattern_table_addr + {sprite_pattern[sprite_num[hc[3:1]]], ysp, 2'b10};
+                    vid_addr <= sprite_pattern_table_addr + {sprite_pattern[sprite_num[hc[3:1]]], sprite_y_line[hc[3:1]], 2'b10};
                 if (hc >= SPRITE_SCAN_END + 66 && hc < SPRITE_SCAN_END + 82)
                     sprite_font2[hc[3:1] - 1] <= vid_out;
                 if (hc >= SPRITE_SCAN_END + 80 && hc < SPRITE_SCAN_END + 96)
-                    vid_addr <= sprite_pattern_table_addr + {sprite_pattern[sprite_num[hc[3:1]]], ysp, 2'b11};
+                    vid_addr <= sprite_pattern_table_addr + {sprite_pattern[sprite_num[hc[3:1]]], sprite_y_line[hc[3:1]], 2'b11};
                 if (hc >= SPRITE_SCAN_END + 82 && hc < SPRITE_SCAN_END + 98)
                     sprite_font3[hc[3:1] - 1] <= vid_out;
               end
