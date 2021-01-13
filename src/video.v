@@ -251,7 +251,7 @@ module video (
 
   wire [2:0] y_scroll_pix = x_char >= 24 && disable_vert ? y[2:0] : y[2:0] + y_scroll[2:0];
   
-  reg h_flip, palette, priority;
+  reg h_flip, palette, back_priority;
 
   wire [3:0] sprite_color4 [0:NUM_ACTIVE_SPRITES-1];
   wire [7:0] xa = x - 6;
@@ -406,7 +406,7 @@ module video (
                 for(i=0;i<4;i++) bit_plane[i] <= bit_plane_next[i];
                 h_flip <= second_index_byte[1];
                 palette <= second_index_byte[3];
-                priority = second_index_byte[4];
+                back_priority = second_index_byte[4];
               end
             end else begin
               // Fetch the font for screen mode 1 to 3
@@ -568,7 +568,7 @@ module video (
     end
   end
 
-  // Set the pixel from highest priority plane 
+  // Set the pixel from highest priority plane
   wire [2:0] index = h_flip ? x_scroll_pix : ~x_scroll_pix;
 
   // Pixel priority
