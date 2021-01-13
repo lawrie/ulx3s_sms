@@ -2,7 +2,7 @@
 module sms
 #(
   parameter c_vga_out     = 0, // 0; Just HDMI, 1: VGA and HDMI
-  parameter c_lcd_hex     = 1, // SPI LCD HEX decoder
+  parameter c_lcd_hex     = 0, // SPI LCD HEX decoder
   parameter c_diag        = 1  // 0: No led diagnostcs, 1: led diagnostics 
 )
 (

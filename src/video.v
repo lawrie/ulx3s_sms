@@ -180,7 +180,7 @@ module video (
 
   assign vga_hs = !(hc >= HA + HFP && hc < HA + HFP + HS);
   assign vga_vs = !(vc >= VA + VFP && vc < VA + VFP + VS);
-  assign vga_de = !(hc > HA || vc > VA);
+  assign vga_de = !(hc >= HA || vc >= VA);
 
   // Set x and y to screen pixel coordinates. x not valid in text mode
   wire [7:0] x = hc[9:1] - HB2;
@@ -285,8 +285,10 @@ module video (
   wire [7:0] sprite_ey = vid_out + 32  + ((8 << sprite_enlarged) << sprite_large);
 
   wire [3:0] scol [0:NUM_ACTIVE_SPRITES-1];
-  wire [2:0] sind = sprite_enlarged ? ~x[3:1] : ~x[2:0];
-  wire [2:0] ysp = sprite_enlarged ? y[3:1] : y[2:0];
+  wire [7:0] xa = x - 6;
+  wire [2:0] sind = sprite_enlarged ? ~xa[3:1] : ~x[2:0];
+  wire [7:0] ya = y - 6;
+  wire [2:0] ysp = sprite_enlarged ? ya[3:1] : y[2:0];
 
   generate
     genvar j;
@@ -563,10 +565,18 @@ module video (
                            mode == 3 ? (x_pix < 4 ? font_line[7:4] : font_line[3:0]) :
                            mode == 4 ? {bit_plane[3][index], bit_plane[2][index], bit_plane[1][index], bit_plane[0][index]} :
                            font_line[~x_pix] ? screen_color[7:4] : screen_color[3:0];
+
+  wire sprite_active = mode == 4 && (
+                                     (sprite_pixel[0] && scol[0] != 0) ||
+                                     (sprite_pixel[1] && scol[1] != 0) ||
+                                     (sprite_pixel[2] && scol[2] != 0) ||
+                                     (sprite_pixel[3] && scol[3] != 0) ||
+                                     (sprite_pixel[4] && scol[4] != 0));
+
   
   // Set the 24-bit color value, taking border into account
   wire [3:0] col = border ? back_color : pixel_color;
-  wire [23:0] color = palette || border || sprite_pixel != 0 ? colors2[col] : colors1[col];
+  wire [23:0] color = palette || sprite_active || border ? colors2[col] : colors1[col];
 
   // Set the 8-bit VGA output signals
   assign vga_r = !vga_de ? 8'b0 : color[23:16];
