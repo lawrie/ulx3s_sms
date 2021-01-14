@@ -441,6 +441,7 @@ module sms
     .disable_horiz(r_vdp[0][6]),
     .lines224(r_vdp[0][1] & r_vdp[1][4]),
     .lines240(r_vdp[0][1] & r_vdp[1][3]),
+    .mask_col0(r_vdp[0][5]),
     .v_counter(v_counter),
     .h_counter(h_counter),
     .diag(vga_diag)

@@ -44,6 +44,7 @@ module video (
   input         disable_horiz,
   input         lines224,
   input         lines240,
+  input         mask_col0,
   output [7:0]  v_counter,
   output [7:0]  h_counter,
   output reg [15:0] diag
@@ -67,7 +68,7 @@ module video (
   parameter VB = 48;
   parameter VB2 = VB/2;
 
-  localparam NUM_SPRITES = 32;
+  localparam NUM_SPRITES = 31;
   localparam NUM_SPRITES2 = NUM_SPRITES * 2;
   localparam NUM_ACTIVE_SPRITES = 8;
   localparam NUM_ACTIVE_LEGACY_SPRITES = 4;
@@ -147,7 +148,7 @@ module video (
   reg [3:0] sprite_color [0:NUM_ACTIVE_SPRITES-1];
   reg [7:0] sprite_pattern [0:NUM_ACTIVE_SPRITES-1];
   reg [NUM_ACTIVE_SPRITES-1:0] sprite_ec;
-  reg [4:0] sprite_num [0:NUM_ACTIVE_SPRITES-1];
+  reg [5:0] sprite_num [0:NUM_ACTIVE_SPRITES-1];
   reg [7:0] sprite_line [0:NUM_ACTIVE_SPRITES-1];
 
   // Fonts are used differently for mode 4, as there are 4 bit planes
@@ -255,7 +256,7 @@ module video (
 
   wire [3:0] sprite_color4 [0:NUM_ACTIVE_SPRITES-1];
   wire [7:0] sprite_y_offset [0:NUM_ACTIVE_SPRITES-1];
-  wire [2:0] sprite_y_line [0:NUM_ACTIVE_SPRITES-1];
+  wire [3:0] sprite_y_line [0:NUM_ACTIVE_SPRITES-1];
   wire [7:0] sprite_x_offset [0:NUM_ACTIVE_SPRITES-1];
   wire [2:0] sprite_x_col [0:NUM_ACTIVE_SPRITES-1];
 
@@ -272,7 +273,7 @@ module video (
       assign sprite_ey1[j] = sprite_sy1[j] + ((8 << sprite_enlarged) << sprite_large);
       // Mode 4
       assign sprite_y_offset[j] = y - sprite_y[j];
-      assign sprite_y_line[j] = sprite_enlarged ? sprite_y_offset[j][3:1] : sprite_y_offset[j][2:0];
+      assign sprite_y_line[j] = sprite_enlarged ? sprite_y_offset[j][3 + sprite_large:1] : sprite_y_offset[j][2 + sprite_large:0];
       assign sprite_x_offset[j] = x - sprite_x[j];
       assign sprite_x_col[j] = sprite_enlarged ? ~sprite_x_offset[j][3:1] : ~sprite_x_offset[j][2:0];
       assign sprite_color4[j] = {sprite_font3[j][sprite_x_col[j]], sprite_font2[j][sprite_x_col[j]], sprite_font1[j][sprite_x_col[j]], sprite_font[j][sprite_x_col[j]]};
@@ -347,6 +348,8 @@ module video (
   integer i;
   // Index of sprite during sprite scan
   wire [1:0] sprite_index = (hc[5:1] - 1) >> 2;
+  wire [7:0] sprite_pat = sprite_pattern[hc[3:1]][7:sprite_large];
+  wire [3:0] sprite_lin = sprite_y_line[hc[3:1]];
 
   // Fetch VRAM data and create pixel output
   always @(posedge clk) begin
@@ -448,11 +451,9 @@ module video (
             end else begin
               for(i=0;i<NUM_ACTIVE_SPRITES;i=i+1) begin
                 if (i < num_sprites) begin
-                  //if (y + 1 >= sprite_y[i] && y + 1 < sprite_y[i] + 8 + (sprite_enlarged ? 8 : 0)) begin
-                    if (x >= sprite_x[i] && x < sprite_x[i] + 8 + (sprite_enlarged ? 8 : 0)) begin
-                      sprite_pixel[i] <= sprite_color4[i] != 0;;
-                    end
-                  //end
+                  if (x >= sprite_x[i] && x < sprite_x[i] + (sprite_enlarged ? 16 : 8)) begin
+                    sprite_pixel[i] <= (sprite_color4[i] != 0);
+                  end
                 end
               end
             end
@@ -466,14 +467,13 @@ module video (
           end else begin // Read sprite attributes and patterns
             if (mode == 4) begin
               if (vc[0] == 1) begin
-                if (hc >= HA && hc < SPRITE_SCAN_END) begin
-                  vid_addr <= sprite_attr_addr + hc[6:1]; // Address of y attribute
-                end
+                if (hc >= HA && hc < SPRITE_SCAN_END)
+                  vid_addr <= sprite_attr_addr + hc[5:1]; // Address of y attribute
                 if (hc >= HA + 2 && hc < SPRITE_SCAN_END + 2 && !sprites_done) begin
                   if (vid_out == 208) sprites_done <= 1;
-                  else if (y >= vid_out && y < vid_out + 8 + (sprite_enlarged ? 8 : 0)) begin
+                  else if (y >= vid_out && y < vid_out + ((sprite_large ? 16 : 8) << sprite_enlarged)) begin
                     if (num_sprites < NUM_ACTIVE_SPRITES) begin
-                      sprite_num[num_sprites] <= hc[6:1] - 1;
+                      sprite_num[num_sprites] <= hc[5:1] - 1;
                       sprite_y[num_sprites] <= vid_out;
                       num_sprites <= num_sprites + 1;
                     end else begin
@@ -485,7 +485,7 @@ module video (
                 if (hc >= SPRITE_SCAN_END && hc < SPRITE_SCAN_END + 16) 
                   vid_addr <= sprite_attr_addr + 128 + {sprite_num[hc[3:1]], 1'b0};
                 if (hc >= SPRITE_SCAN_END + 2 && hc < SPRITE_SCAN_END + 18)
-                  sprite_x[hc[3:1] - 1] <= vid_out;
+                  sprite_x[hc[6:1] - 1] <= vid_out;
                 // Read the pattern number values for the row
                 if (hc >= SPRITE_SCAN_END + 16 && hc < SPRITE_SCAN_END + 32) 
                   vid_addr <= sprite_attr_addr + 128 + {sprite_num[hc[3:1]], 1'b1};
@@ -493,19 +493,19 @@ module video (
                   sprite_pattern[hc[3:1] - 1] <= vid_out;
                 // Read the sprite bit planes for the row
                 if (hc >= SPRITE_SCAN_END + 32 && hc < SPRITE_SCAN_END + 48)
-                    vid_addr <= sprite_pattern_table_addr + {sprite_pattern[sprite_num[hc[3:1]]], sprite_y_line[hc[3:1]], 2'b00};
+                    vid_addr <= sprite_pattern_table_addr + {sprite_pat, sprite_lin[2+sprite_large:0], 2'b00};
                 if (hc >= SPRITE_SCAN_END + 34 && hc < SPRITE_SCAN_END + 50)
                     sprite_font[hc[3:1] - 1] <= vid_out;
                 if (hc >= SPRITE_SCAN_END + 48 && hc < SPRITE_SCAN_END + 64)
-                    vid_addr <= sprite_pattern_table_addr + {sprite_pattern[sprite_num[hc[3:1]]], sprite_y_line[hc[3:1]], 2'b01};
+                    vid_addr <= sprite_pattern_table_addr + {sprite_pat, sprite_lin[2+sprite_large:0], 2'b01};
                 if (hc >= SPRITE_SCAN_END + 50 && hc < SPRITE_SCAN_END + 66)
                     sprite_font1[hc[3:1] - 1] <= vid_out;
                 if (hc >= SPRITE_SCAN_END + 64 && hc < SPRITE_SCAN_END + 80)
-                    vid_addr <= sprite_pattern_table_addr + {sprite_pattern[sprite_num[hc[3:1]]], sprite_y_line[hc[3:1]], 2'b10};
+                    vid_addr <= sprite_pattern_table_addr + {sprite_pat, sprite_lin[2+sprite_large:0], 2'b10};
                 if (hc >= SPRITE_SCAN_END + 66 && hc < SPRITE_SCAN_END + 82)
                     sprite_font2[hc[3:1] - 1] <= vid_out;
                 if (hc >= SPRITE_SCAN_END + 80 && hc < SPRITE_SCAN_END + 96)
-                    vid_addr <= sprite_pattern_table_addr + {sprite_pattern[sprite_num[hc[3:1]]], sprite_y_line[hc[3:1]], 2'b11};
+                    vid_addr <= sprite_pattern_table_addr + {sprite_pat, sprite_lin[2+sprite_large:0], 2'b11};
                 if (hc >= SPRITE_SCAN_END + 82 && hc < SPRITE_SCAN_END + 98)
                     sprite_font3[hc[3:1] - 1] <= vid_out;
               end
@@ -580,14 +580,15 @@ module video (
                            mode != 4 && sprite_pixel[1] ? sprite_color[1] :
                            mode != 4 && sprite_pixel[2] ? sprite_color[2] :
                            mode != 4 && sprite_pixel[3] ? sprite_color[3] : 
-                           mode == 4 & sprite_pixel[0] ? sprite_color4[0] :
-                           mode == 4 & sprite_pixel[1] ? sprite_color4[1] :
-                           mode == 4 & sprite_pixel[2] ? sprite_color4[2] :
-                           mode == 4 & sprite_pixel[3] ? sprite_color4[3] :
-                           mode == 4 & sprite_pixel[4] ? sprite_color4[4] :
-                           mode == 4 & sprite_pixel[5] ? sprite_color4[5] :
-                           mode == 4 & sprite_pixel[6] ? sprite_color4[6] :
-                           mode == 4 & sprite_pixel[7] ? sprite_color4[7] :
+                           mode == 4 && sprite_pixel[0] ? sprite_color4[0] :
+                           mode == 4 && sprite_pixel[1] ? sprite_color4[1] :
+                           mode == 4 && sprite_pixel[2] ? sprite_color4[2] :
+                           mode == 4 && sprite_pixel[3] ? sprite_color4[3] :
+                           mode == 4 && sprite_pixel[4] ? sprite_color4[4] :
+                           mode == 4 && sprite_pixel[5] ? sprite_color4[5] :
+                           mode == 4 && sprite_pixel[6] ? sprite_color4[6] :
+                           mode == 4 && sprite_pixel[7] ? sprite_color4[7] :
+                           mode == 4 && x < 8 && mask_col0 ? back_color :
                            mode == 0 ? (font_line[~x_pix] ? text_color : back_color) :
                            mode == 3 ? (x_pix < 4 ? font_line[7:4] : font_line[3:0]) :
                            mode == 4 ? {bit_plane[3][index], bit_plane[2][index], bit_plane[1][index], bit_plane[0][index]} :
@@ -603,6 +604,6 @@ module video (
   assign vga_b = !vga_de ? 8'b0 : color[7:0];
 
   // LED diagnostics
-  always @(posedge clk) diag = {sprite_font1[0], sprite_font2[0]};
+  always @(posedge clk) if (y >= 8'h94 && y < 8'h9c) diag <= sprite_pattern[1];
 
 endmodule
