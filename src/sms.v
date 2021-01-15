@@ -3,7 +3,8 @@ module sms
 #(
   parameter c_vga_out     = 0, // 0; Just HDMI, 1: VGA and HDMI
   parameter c_lcd_hex     = 0, // SPI LCD HEX decoder
-  parameter c_diag        = 1  // 0: No led diagnostcs, 1: led diagnostics 
+  parameter c_diag        = 1, // 0: No led diagnostcs, 1: led diagnostics 
+  parameter c_volume      = 4  // Sound volume 0 - 15
 )
 (
   input         clk_25mhz,
@@ -240,8 +241,6 @@ module sms
     n_hard_reset <= pwr_up_reset_n & btn[0] & ~R_cpu_control[0];
 
   wire reset = !n_hard_reset;
-
-  wire sound_ready;
 
   tv80n cpu1 (
     .reset_n(n_hard_reset),
@@ -552,12 +551,11 @@ module sms
   // ===============================================================
   // Audio
   // ===============================================================
-  wire [3:0] sound_ao;
+  wire [13:0] audio_dout;
+  wire aud_l, aud_r;
+  wire sound_ready;
 
-  assign audio_l = sound_ao;
-  assign audio_r = audio_l;
-
-  sn76489 #(4) audio (
+  sn76489 #(14) sound (
     .clk(cpuClock),
     .clk_en(cpuClockEnable),
     .reset(!n_hard_reset),
@@ -565,8 +563,20 @@ module sms
     .we_n(!(psg_write_port && n_ioWR == 1'b0)),
     .ready(sound_ready),
     .d(cpuDataOut),
-    .audio_out(sound_ao)
+    .audio_out(audio_dout)
   );
+
+  // Use sigma-delta dac to get single-bit output
+  sigma_delta_dac dac (
+    .clk(cpuClock),
+    .ldatasum(audio_dout),
+    .rdatasum(audio_dout),
+    .left(aud_l),
+    .right(aud_r)
+  );
+
+  assign audio_l = aud_l ? c_volume : 0;
+  assign audio_r = audio_l;
 
   // ===============================================================
   // Diagnostic LCD 
