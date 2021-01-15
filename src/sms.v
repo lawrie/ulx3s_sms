@@ -74,6 +74,7 @@ module sms
   wire [7:0] h_counter;
 
   reg [7:0] r_mem_ctrl;
+  reg [7:0] r_joy_ctrl;
 
   // pull-ups for us2 connector 
   assign usb_fpga_pu_dp = 1;
@@ -174,6 +175,7 @@ module sms
   // ===============================================================
   // Joystick for OSD control and games
   // ===============================================================
+  reg joypad2 = 0;
   reg [6:0] R_btn_joy;
   always @(posedge cpuClock)
     R_btn_joy <= btn;
@@ -364,6 +366,7 @@ module sms
       slot1 <= 1;
       slot2 <= 2;
       mem_misc <= 0;
+      r_joy_ctrl <= 0;
     end else if (cpuClockEdge) begin
       // VDP interface
       if (vga_wr) vga_addr <= vga_addr + 1;
@@ -392,6 +395,8 @@ module sms
           first_addr_byte <= cpuDataOut;
       end else if (mem_ctrl_port && n_ioWR == 1'b0) begin
         r_mem_ctrl <= cpuDataOut; // Memory control write
+      end else if (joypad_ctrl_port && n_ioWR == 1'b0) begin
+        r_joy_ctrl <= cpuDataOut;
       end
 
       if (cpuAddress == 16'hfffc && n_memWR == 1'b0) mem_misc <= cpuDataOut;
@@ -502,8 +507,8 @@ module sms
   reg  r_interrupt_flag, r_sprite_collision;
   reg  r_status_read;
   wire [7:0] status = {r_interrupt_flag, too_many_sprites, r_sprite_collision, (too_many_sprites ? spritex : 5'b11111)};
-  wire [7:0] joy_data0 = {~R_btn_joy[2:1], ~R_btn_joy[6:3]};
-  wire [7:0] joy_data1 = {~R_btn_joy[2:1], ~R_btn_joy[6:3]};
+  wire [7:0] joy_data0 = joypad2 ? {R_btn_joy[4:3], 6'b111111} : {2'b11, ~R_btn_joy[2:1], ~R_btn_joy[6:3]};
+  wire [7:0] joy_data1 = joypad2 ? {4'b0101, R_btn_joy[2:1], R_btn_joy[6:5]} : {8'b10111111};
 
   assign cpuDataIn =  vdp_data_port && n_ioRD == 1'b0 ? vga_dout :
                       vdp_ctrl_port && n_ioRD == 1'b0 ? status :
@@ -654,6 +659,6 @@ module sms
   // ===============================================================
   assign led = {pc[15:14], !n_hard_reset, mode};
 
-  always @(posedge cpuClock) diag16 <= vga_diag;
+  always @(posedge cpuClock) diag16 <= {joy_data0, r_joy_ctrl};
 
 endmodule

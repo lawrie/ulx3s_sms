@@ -603,7 +603,7 @@ module video (
   assign vga_g = !vga_de ? 8'b0 : color[15:8];
   assign vga_b = !vga_de ? 8'b0 : color[7:0];
 
-  // LED diagnostics
-  always @(posedge clk) if (y >= 8'h94 && y < 8'h9c) diag <= sprite_pattern[1];
+  // Diagnostics
+  always @(posedge clk) diag <= 0;
 
 endmodule
