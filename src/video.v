@@ -147,15 +147,15 @@ module video (
   reg [7:0] screen_color_next;
 
   // Legacy modes only support 4 sprites, mode 4 supports 8
-  reg [7:0] sprite_y [0:NUM_ACTIVE_LEGACY_SPRITES-1];
-  reg [7:0] sprite_x [0:NUM_ACTIVE_LEGACY_SPRITES-1];
   reg [3:0] sprite_color [0:NUM_ACTIVE_LEGACY_SPRITES-1];
-  reg [7:0] sprite_pattern [0:NUM_ACTIVE_LEGACY_SPRITES-1];
   reg [NUM_ACTIVE_SPRITES-1:0] sprite_ec;
-  reg [5:0] sprite_num [0:NUM_ACTIVE_LEGACY_SPRITES-1];
   reg [7:0] sprite_line [0:NUM_ACTIVE_LEGACY_SPRITES-1];
 
   // Fonts are used differently for mode 4, as there are 4 bit planes
+  reg [7:0] sprite_y [0:NUM_ACTIVE_SPRITES-1];
+  reg [7:0] sprite_x [0:NUM_ACTIVE_SPRITES-1];
+  reg [7:0] sprite_pattern [0:NUM_ACTIVE_SPRITES-1];
+  reg [5:0] sprite_num [0:NUM_ACTIVE_SPRITES-1];
   reg [7:0] sprite_font [0:NUM_ACTIVE_SPRITES-1];
   reg [7:0] sprite_font1 [0:NUM_ACTIVE_SPRITES-1];
   reg [7:0] sprite_font2 [0:NUM_ACTIVE_SPRITES-1];
@@ -608,6 +608,6 @@ module video (
   assign vga_b = !vga_de ? 8'b0 : color[7:0];
 
   // Diagnostics
-  always @(posedge clk) diag <= 0;
+  always @(posedge clk) diag <= {sprite_pattern[0], sprite_pattern[1]};
 
 endmodule
