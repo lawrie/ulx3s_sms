@@ -659,6 +659,6 @@ module sms
   // ===============================================================
   assign led = {pc[15:14], !n_hard_reset, mode};
 
-  always @(posedge cpuClock) diag16 <= {joy_data0, r_joy_ctrl};
+  always @(posedge cpuClock) diag16 <= {r_vdp[0], r_vdp[1]};
 
 endmodule
