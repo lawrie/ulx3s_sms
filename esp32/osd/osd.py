@@ -181,6 +181,7 @@ class osd:
       or filename.endswith(".col") \
       or filename.endswith(".sg") \
       or filename.endswith(".sms") \
+      or filename.endswith(".gg") \
       or filename.endswith(".snes") \
       or filename.endswith(".smc") \
       or filename.endswith(".sfc"):

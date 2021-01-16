@@ -68,17 +68,21 @@ module video (
   parameter VB = 48;
   parameter VB2 = VB/2;
 
+  // Values for mode 4
   localparam NUM_SPRITES = 31;
-  localparam NUM_SPRITES2 = NUM_SPRITES * 2;
   localparam NUM_ACTIVE_SPRITES = 8;
-  localparam NUM_ACTIVE_LEGACY_SPRITES = 4;
-  localparam NUM_ACTIVE_SPRITES2 = NUM_ACTIVE_SPRITES * 2;
-  localparam NUM_ACTIVE_SPRITES8 = NUM_ACTIVE_SPRITES * 8;
+  localparam SPRITE_SCAN_END = HA + (NUM_SPRITES * 2);
 
-  localparam SPRITE_SCAN_END = HA + NUM_SPRITES2;
-  localparam SPRITE_ATTR_SCAN_END = SPRITE_SCAN_END + NUM_ACTIVE_SPRITES8;
-  localparam SPRITE_PATTERN_SCAN_END = SPRITE_ATTR_SCAN_END + NUM_ACTIVE_SPRITES2;
-  localparam SPRITE_PATTERN2_SCAN_END = SPRITE_PATTERN_SCAN_END + NUM_ACTIVE_SPRITES2;
+  // Values for legacy modes 0 - 3
+  localparam NUM_LEGACY_SPRITES = 32;
+  localparam NUM_ACTIVE_LEGACY_SPRITES = 4;
+  localparam NUM_LEGACY_SPRITES2 = NUM_LEGACY_SPRITES * 2;
+  localparam NUM_ACTIVE_LEGACY_SPRITES2 = NUM_ACTIVE_LEGACY_SPRITES * 2;
+  localparam NUM_ACTIVE_LEGACY_SPRITES8 = NUM_ACTIVE_LEGACY_SPRITES * 8;
+  localparam LEGACY_SPRITE_SCAN_END = HA + NUM_LEGACY_SPRITES2;
+  localparam LEGACY_SPRITE_ATTR_SCAN_END = LEGACY_SPRITE_SCAN_END + NUM_ACTIVE_LEGACY_SPRITES8;
+  localparam LEGACY_SPRITE_PATTERN_SCAN_END = LEGACY_SPRITE_ATTR_SCAN_END + NUM_ACTIVE_LEGACY_SPRITES2;
+  localparam LEGACY_SPRITE_PATTERN2_SCAN_END = LEGACY_SPRITE_PATTERN_SCAN_END + NUM_ACTIVE_LEGACY_SPRITES2;
 
   // MSX color palette
   localparam transparent  = 24'h000000;
@@ -143,13 +147,13 @@ module video (
   reg [7:0] screen_color_next;
 
   // Legacy modes only support 4 sprites, mode 4 supports 8
-  reg [7:0] sprite_y [0:NUM_ACTIVE_SPRITES-1];
-  reg [7:0] sprite_x [0:NUM_ACTIVE_SPRITES-1];
-  reg [3:0] sprite_color [0:NUM_ACTIVE_SPRITES-1];
-  reg [7:0] sprite_pattern [0:NUM_ACTIVE_SPRITES-1];
+  reg [7:0] sprite_y [0:NUM_ACTIVE_LEGACY_SPRITES-1];
+  reg [7:0] sprite_x [0:NUM_ACTIVE_LEGACY_SPRITES-1];
+  reg [3:0] sprite_color [0:NUM_ACTIVE_LEGACY_SPRITES-1];
+  reg [7:0] sprite_pattern [0:NUM_ACTIVE_LEGACY_SPRITES-1];
   reg [NUM_ACTIVE_SPRITES-1:0] sprite_ec;
-  reg [5:0] sprite_num [0:NUM_ACTIVE_SPRITES-1];
-  reg [7:0] sprite_line [0:NUM_ACTIVE_SPRITES-1];
+  reg [5:0] sprite_num [0:NUM_ACTIVE_LEGACY_SPRITES-1];
+  reg [7:0] sprite_line [0:NUM_ACTIVE_LEGACY_SPRITES-1];
 
   // Fonts are used differently for mode 4, as there are 4 bit planes
   reg [7:0] sprite_font [0:NUM_ACTIVE_SPRITES-1];
@@ -170,11 +174,11 @@ module video (
   reg       sprites_done;
   reg [3:0] num_sprites;
 
-  wire [7:0] sprite_sy1 [0:NUM_ACTIVE_SPRITES+1]; // Start y pos + 1
-  wire [7:0] sprite_ey1 [0:NUM_ACTIVE_SPRITES+1]; // End y pos + 1
-  wire [8:0] sprite_sx  [0:NUM_ACTIVE_SPRITES-1]; // Start x pos 0 - 287
-  wire [8:0] sprite_ex  [0:NUM_ACTIVE_SPRITES+1]; // End y pos of first 8 pixels 
-  wire [8:0] sprite_exl [0:NUM_ACTIVE_SPRITES+1]; // End y pos
+  wire [7:0] sprite_sy1 [0:NUM_ACTIVE_LEGACY_SPRITES+1]; // Start y pos + 1
+  wire [7:0] sprite_ey1 [0:NUM_ACTIVE_LEGACY_SPRITES+1]; // End y pos + 1
+  wire [8:0] sprite_sx  [0:NUM_ACTIVE_LEGACY_SPRITES-1]; // Start x pos 0 - 287
+  wire [8:0] sprite_ex  [0:NUM_ACTIVE_LEGACY_SPRITES+1]; // End y pos of first 8 pixels 
+  wire [8:0] sprite_exl [0:NUM_ACTIVE_LEGACY_SPRITES+1]; // End y pos
 
   // Sprite collision count
   wire [3:0] sprite_count = 
@@ -221,8 +225,8 @@ module video (
   // Sprite data for modes 2 and 3
 
   // Calculate pixel positions for 4 active sprites
-  wire [2:0] sprite_col [0:NUM_ACTIVE_SPRITES-1];
-  wire [3:0] sprite_row [0:NUM_ACTIVE_SPRITES-1];
+  wire [2:0] sprite_col [0:NUM_ACTIVE_LEGACY_SPRITES-1];
+  wire [3:0] sprite_row [0:NUM_ACTIVE_LEGACY_SPRITES-1];
 
   // Sprite horizontal positions start at -32, and have range 0 - 287
   wire [7:0] x1 = x + 1;
@@ -263,7 +267,7 @@ module video (
   // Generate sprite arrays
   generate
     genvar j;
-    for(j=0;j<NUM_ACTIVE_SPRITES;j=j+1) begin
+    for(j=0;j<NUM_ACTIVE_LEGACY_SPRITES;j=j+1) begin
       assign sprite_col[j] = ((x1 - sprite_x[j]) >> sprite_enlarged);
       assign sprite_row[j] = ((y - sprite_y[j]) >> sprite_enlarged);
       assign sprite_sx[j]  = sprite_x[j] + (sprite_ec[j] ? 0 : 32);
@@ -271,6 +275,8 @@ module video (
       assign sprite_exl[j] = sprite_sx[j] + ((8 << sprite_enlarged) << sprite_large);
       assign sprite_sy1[j] = sprite_y[j] + 33;
       assign sprite_ey1[j] = sprite_sy1[j] + ((8 << sprite_enlarged) << sprite_large);
+    end
+    for(j=0;j<NUM_ACTIVE_SPRITES;j=j+1) begin
       // Mode 4
       assign sprite_y_offset[j] = y - sprite_y[j];
       assign sprite_y_line[j] = sprite_enlarged ? sprite_y_offset[j][3 + sprite_large:1] : sprite_y_offset[j][2 + sprite_large:0];
@@ -436,7 +442,7 @@ module video (
             // Position the sprites
             sprite_pixel <= 0;
             if (mode != 4) begin
-              for(i=0;i<NUM_ACTIVE_SPRITES;i=i+1) if (i < num_sprites) begin
+              for(i=0;i<NUM_ACTIVE_LEGACY_SPRITES;i=i+1) if (i < num_sprites) begin
                 // Set the sprite fonts
                 if (x34 == sprite_sx[i])
                   sprite_line[i] <= sprite_font[i];
@@ -513,12 +519,12 @@ module video (
             end else begin
               // Look at up to 32 sprites
               if (vc[0] == 1) begin
-                if (hc >= HA && hc < SPRITE_SCAN_END) begin
+                if (hc >= HA && hc < LEGACY_SPRITE_SCAN_END) begin
                   // Fetch y attribute
                   vid_addr <= sprite_attr_addr + {hc[5:1], 2'b0};
                 end
                 // Check if sprite is on the line
-                if (hc >= HA + 2 && hc < SPRITE_SCAN_END + 2 && !sprites_done) begin
+                if (hc >= HA + 2 && hc < LEGACY_SPRITE_SCAN_END + 2 && !sprites_done) begin
                    if (vid_out == 208) sprites_done <= 1;
                    else if (y32 >= sprite_sy && y32 < sprite_ey) begin
                      if (num_sprites < 4) begin
@@ -531,9 +537,9 @@ module video (
                   end
                 end
                 // Read the sprite attributes for the row
-                if (hc >= SPRITE_SCAN_END && hc < SPRITE_ATTR_SCAN_END) 
+                if (hc >= LEGACY_SPRITE_SCAN_END && hc < LEGACY_SPRITE_ATTR_SCAN_END) 
                   vid_addr <= sprite_attr_addr + {sprite_num[hc[4:3]], hc[2:1]};
-                if (hc >= SPRITE_SCAN_END + 2 && hc < SPRITE_ATTR_SCAN_END + 2) begin
+                if (hc >= LEGACY_SPRITE_SCAN_END + 2 && hc < LEGACY_SPRITE_ATTR_SCAN_END + 2) begin
                   case ((hc[3:1] - 1) & 2'b11)
                     0: sprite_y[sprite_index] <= vid_out;
                     1: sprite_x[sprite_index] <= vid_out;
@@ -545,7 +551,7 @@ module video (
                   endcase
                 end 
                 // Read the sprite patterns for the row
-                if (hc >= SPRITE_ATTR_SCAN_END && hc < SPRITE_PATTERN_SCAN_END)
+                if (hc >= LEGACY_SPRITE_ATTR_SCAN_END && hc < LEGACY_SPRITE_PATTERN_SCAN_END)
                   if (sprite_large) 
                     vid_addr <= sprite_pattern_table_addr + 
                                 {sprite_pattern[hc[2:1]][7:2],1'b0, sprite_row[hc[2:1]][3:0]};
@@ -553,15 +559,15 @@ module video (
                     vid_addr <= sprite_pattern_table_addr + 
                                 {sprite_pattern[hc[2:1]], sprite_row[hc[2:1]][2:0]};
 
-                if (hc >= SPRITE_ATTR_SCAN_END + 2 && hc < SPRITE_PATTERN_SCAN_END + 2) 
+                if (hc >= LEGACY_SPRITE_ATTR_SCAN_END + 2 && hc < LEGACY_SPRITE_PATTERN_SCAN_END + 2) 
                   sprite_font[hc[2:1]-1] <= vid_out;
         
                 if (sprite_large) begin
-                  if (hc >= SPRITE_PATTERN_SCAN_END  && hc < SPRITE_PATTERN2_SCAN_END) 
+                  if (hc >= LEGACY_SPRITE_PATTERN_SCAN_END  && hc < LEGACY_SPRITE_PATTERN2_SCAN_END) 
                     vid_addr <= sprite_pattern_table_addr + 
                                 {sprite_pattern[hc[2:1]][7:2],1'b1, sprite_row[hc[2:1]][3:0]};
 
-                  if (hc >= SPRITE_PATTERN_SCAN_END + 2 && hc < SPRITE_PATTERN2_SCAN_END + 2)
+                  if (hc >= LEGACY_SPRITE_PATTERN_SCAN_END + 2 && hc < LEGACY_SPRITE_PATTERN2_SCAN_END + 2)
                     sprite_font1[hc[2:1]-1] <= vid_out;
                 end
               end
