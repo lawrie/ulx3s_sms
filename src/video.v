@@ -171,6 +171,7 @@ module video (
   reg [7:0] font_line;
   
   reg [7:0] sprite_pixel;
+  wire [7:0] sprite_pix;
   reg       sprites_done;
   reg [3:0] num_sprites;
 
@@ -182,10 +183,10 @@ module video (
 
   // Sprite collision count
   wire [3:0] sprite_count = 
-             sprite_pixel[7] + sprite_pixel[6] + 
-             sprite_pixel[5] + sprite_pixel[4] + 
-             sprite_pixel[3] + sprite_pixel[2] + 
-             sprite_pixel[1] + sprite_pixel[0];
+             sprite_pix[7] + sprite_pix[6] + 
+             sprite_pix[5] + sprite_pix[4] + 
+             sprite_pix[3] + sprite_pix[2] + 
+             sprite_pix[1] + sprite_pix[0];
 
   // Sprite collision status data
   assign sprite_collision  = (sprite_count > 1);
@@ -283,6 +284,7 @@ module video (
       assign sprite_x_offset[j] = x - sprite_x[j];
       assign sprite_x_col[j] = sprite_enlarged ? ~sprite_x_offset[j][3:1] : ~sprite_x_offset[j][2:0];
       assign sprite_color4[j] = {sprite_font3[j][sprite_x_col[j]], sprite_font2[j][sprite_x_col[j]], sprite_font1[j][sprite_x_col[j]], sprite_font[j][sprite_x_col[j]]};
+      assign sprite_pix[j] = sprite_pixel[j] && sprite_color4[j] != 0;
     end
   endgenerate
 
@@ -456,8 +458,9 @@ module video (
           end else begin
             for(i=0;i<NUM_ACTIVE_SPRITES;i=i+1) begin
               if (i < num_sprites) begin
-                if (x >= sprite_x[i] && x < sprite_x[i] + (sprite_enlarged ? 16 : 8)) begin
-                  sprite_pixel[i] <= (sprite_color4[i] != 0);
+                if (x1 >= sprite_x[i] && x1 < sprite_x[i] + (sprite_enlarged ? 16 : 8)) begin
+                  //sprite_pixel[i] <= (sprite_color4[i] != 0);
+                  sprite_pixel[i] <= 1;
                 end
               end
             end
@@ -584,14 +587,14 @@ module video (
                            mode != 4 && sprite_pixel[1] ? sprite_color[1] :
                            mode != 4 && sprite_pixel[2] ? sprite_color[2] :
                            mode != 4 && sprite_pixel[3] ? sprite_color[3] : 
-                           mode == 4 && sprite_pixel[0] ? sprite_color4[0] :
-                           mode == 4 && sprite_pixel[1] ? sprite_color4[1] :
-                           mode == 4 && sprite_pixel[2] ? sprite_color4[2] :
-                           mode == 4 && sprite_pixel[3] ? sprite_color4[3] :
-                           mode == 4 && sprite_pixel[4] ? sprite_color4[4] :
-                           mode == 4 && sprite_pixel[5] ? sprite_color4[5] :
-                           mode == 4 && sprite_pixel[6] ? sprite_color4[6] :
-                           mode == 4 && sprite_pixel[7] ? sprite_color4[7] :
+                           mode == 4 && sprite_pix[0] ? sprite_color4[0] :
+                           mode == 4 && sprite_pix[1] ? sprite_color4[1] :
+                           mode == 4 && sprite_pix[2] ? sprite_color4[2] :
+                           mode == 4 && sprite_pix[3] ? sprite_color4[3] :
+                           mode == 4 && sprite_pix[4] ? sprite_color4[4] :
+                           mode == 4 && sprite_pix[5] ? sprite_color4[5] :
+                           mode == 4 && sprite_pix[6] ? sprite_color4[6] :
+                           mode == 4 && sprite_pix[7] ? sprite_color4[7] :
                            mode == 4 && x < 8 && mask_col0 ? back_color :
                            mode == 0 ? (font_line[~x_pix] ? text_color : back_color) :
                            mode == 3 ? (x_pix < 4 ? font_line[7:4] : font_line[3:0]) :
@@ -600,7 +603,7 @@ module video (
 
   // Set the 24-bit color value, taking border into account
   wire [3:0] col = border ? back_color : pixel_color;
-  wire [23:0] color = palette || sprite_pixel != 0 || border ? colors2[col] : colors1[col];
+  wire [23:0] color = palette || sprite_pix != 0 || border ? colors2[col] : colors1[col];
 
   // Set the 8-bit VGA output signals
   assign vga_r = !vga_de ? 8'b0 : color[23:16];
