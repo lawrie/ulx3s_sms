@@ -215,7 +215,7 @@ module video (
 
   wire [3:0] char_width = (mode == 0 ? 6 : 8);
   wire [4:0] next_char = x_char + 1;
-  wire [4:0] next_scroll = x_pix < 16 && disable_horiz ? next_char : next_char - x_scroll[7:3];
+  wire [4:0] next_scroll = y < 16 && disable_horiz ? next_char : next_char - x_scroll[7:3];
 
   // Calculate the border
   wire [9:0] hb_adj = (mode == 0 ? HBadj : 0);
@@ -247,7 +247,7 @@ module video (
 
   reg [7:0] r_y_scroll;
 
-  wire [2:0] x_scroll_pix = x_pix < 16 && disable_horiz ? x_pix : x_pix - x_scroll[2:0];
+  wire [2:0] x_scroll_pix = y < 16 && disable_horiz ? x_pix : x_pix - x_scroll[2:0];
 
   wire [7:0] depth = (line240 ? 240 : line224 : 224 : 192);
   wire [7:0] y_limit = (lines240 | lines224) ? 255 : 223;
