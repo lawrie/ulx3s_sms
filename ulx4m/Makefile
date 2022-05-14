@@ -7,6 +7,7 @@ VERILOG = ../src/ulx4m_sms.v ../src/ram.v ../src/vram.v ../src/rom.v \
 	  ../src/sdram.v \
           ../src/spi_display/lcd_video.v \
           ../src/spi_display/hex_decoder_v.v \
+	  ../src/flash_loader.v ../src/flashmem.v \
 	  ../src/osd/osd.v ../src/osd/spi_osd.v \
 	  ../src/osd/spi_ram_btn.v ../src/osd/spirw_slave_v.v
 
