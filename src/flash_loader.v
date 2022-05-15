@@ -19,6 +19,7 @@ module flash_loader
   output reg [21:0] load_addr,
   output [7:0] load_write_data,
   output data_valid,
+  input valid,
 
   output reg load_done = 0
 );
@@ -30,7 +31,7 @@ localparam [23:0] FLASH_BEGIN_ADDR = 24'h400000;
 localparam [23:0] FLASH_BEGIN_ADDR = 24'h000000;
 `endif
 
-wire flashmem_valid = !load_done;
+wire flashmem_valid = !load_done && valid;
 wire flashmem_ready;
 assign data_valid = flashmem_ready;
 wire [23:0] flashmem_addr = (FLASH_BEGIN_ADDR + (index_lat << 18)) | {load_addr};

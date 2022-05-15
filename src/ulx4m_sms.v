@@ -3,7 +3,7 @@
 module sms
 #(
   parameter c_vga_out      = 0, // 0; Just HDMI, 1: VGA and HDMI
-  parameter c_lcd_hex      = 0, // SPI LCD HEX decoder
+  parameter c_lcd_hex      = 1, // SPI LCD HEX decoder
   parameter C_flash_loader = 1, // fujprog -j flash -f 0x200000 100in1.img
   parameter C_esp32_loader = 0, // Needs import osd on ESP32 
   parameter c_diag         = 0, // 0: No led diagnostcs, 1: led diagnostics 
@@ -80,7 +80,7 @@ module sms
 
 `ifdef ulx4m
   //Gpio
-  output [19:18] gpio,
+  output [27:0] gpio,
 `endif
   
   // Leds
@@ -91,6 +91,12 @@ module sms
 `endif
 
 );
+
+`ifdef ulx4m
+  assign sd_d[2:1] = 4'bzz;
+  assign sd_clk = 1'bz;
+  assign sd_cmd = 1'bz;
+`endif
 
   // prevent crosstalk at flash unused lines
   assign flash_wpn = 1;
@@ -156,12 +162,39 @@ module sms
   generate 
     genvar i;
     if (c_diag) begin
+`ifdef ulx3s
       for(i = 0; i < 4; i = i+1) begin
         assign gn[17-i] = diag16[8+i];
         assign gp[17-i] = diag16[12+i];
         assign gn[24-i] = diag16[i];
         assign gp[24-i] = diag16[4+i];
       end
+`else
+      //assign gpio[8]  = diag16[8];
+      //assign gpio[10] = diag16[9];
+      //assign gpio[9]  = diag16[10];
+      //assign gpio[11] = diag16[11];
+      //assign gpio[19] = diag16[12];
+      //assign gpio[20] = diag16[13];
+      //assign gpio[21] = diag16[14];
+      //assign gpio[18] = diag16[15];
+      assign gpio[16] = diag16[8];
+      assign gpio[14] = diag16[9];
+      assign gpio[15] = diag16[10];
+      assign gpio[17] = diag16[11];
+      assign gpio[4]  = diag16[12];
+      assign gpio[12] = diag16[13];
+      assign gpio[5]  = diag16[14];
+      assign gpio[6]  = diag16[15];
+      assign gpio[7]  = diag16[0];
+      assign gpio[10] = diag16[1];
+      assign gpio[9]  = diag16[2];
+      assign gpio[11] = diag16[3];
+      assign gpio[26] = diag16[4];
+      assign gpio[13] = diag16[5];
+      assign gpio[3]  = diag16[6];
+      assign gpio[2]  = diag16[7];
+`endif
     end
   endgenerate
   
@@ -253,12 +286,14 @@ module sms
 `ifdef ulx3s
     .csn(~wifi_gpio5),
     .sclk(wifi_gpio16),
+    .mosi(sd_d[1]), // wifi_gpio4
+    .miso(sd_d[2]), // wifi_gpio12
 `else
     .csn(1'b1),
     .sclk(1'b0),
+    .mosi(1'b0), 
+    .miso(),
 `endif
-    .mosi(sd_d[1]), // wifi_gpio4
-    .miso(sd_d[2]), // wifi_gpio12
     .btn(R_btn_joy),
     .irq(irq),
     .wr(spi_ram_wr),
@@ -294,7 +329,21 @@ module sms
   wire  [7:0] flash_loader_data_out;
   wire [21:0] flash_loader_addr;
   wire flash_loader_data_ready;
-  wire loader_write;
+  reg [1:0] loader_write = 0;
+  reg [21:0] loader_addr;
+  reg [7:0] loader_data;
+  reg oldClockEnable;
+
+  always @(posedge cpuClock) begin
+    oldClockEnable <= cpuClockEnable;
+    if (flash_loader_data_ready) begin
+      loader_write <= 1; // We have a byte to write
+      loader_addr <= flash_loader_addr;
+      loader_data <= flash_loader_data_out;
+    end
+    if (cpuClockEnable && loader_write == 1) loader_write <= 2; // Write started
+    if (oldClockEnable && !cpuClockEnable && loader_write == 2) loader_write <= 0; // Write complete
+  end
 
   generate
   if(C_flash_loader)
@@ -310,6 +359,7 @@ module sms
     .load_write_data(flash_loader_data_out),
     .data_valid(flash_loader_data_ready),
     .load_done(load_done),
+    .valid(loader_write == 0),
     //Flash load interface
     .flash_csn(flash_csn),
     .flash_sck(flash_sck),
@@ -375,6 +425,7 @@ module sms
 
   assign sdram_d = sdram_d_wr ? sdram_d_out : 16'hzzzz;
   assign sdram_d_in = sdram_d;
+  assign sdram_cke = 1'b1;
   sdram
   sdram_i
   (
@@ -395,16 +446,16 @@ module sms
    // cpu/chipset interface
    .weA(0),
    .addrA(sdramAddress),
-   .oeA(cpuClockEnable),
+   .oeA(load_done & cpuClockEnable),
    .dinA(0),
    .doutA(romOut),
    // SPI interface
    //.weB(spi_ram_wr && spi_ram_addr[31:24] == 8'h00),
    //.addrB(spi_ram_addr[23:0]),
    //.dinB(spi_ram_di),
-   .weB(!load_done && flash_loader_data_ready),
-   .addrB(flash_loader_addr),
-   .dinB(flash_loader_data_out),
+   .weB(!load_done && loader_write > 0 && cpuClockEnable),
+   .addrB(loader_addr),
+   .dinB(loader_data),
    .oeB(0),
    .doutB()
   );
@@ -569,7 +620,7 @@ module sms
 `ifdef ulx3s
     .i_csn(~wifi_gpio5), .i_sclk(wifi_gpio16), .i_mosi(sd_d[1]), // .o_miso(),
 `else
-    .i_csn(1'b1), .i_sclk(1'b0), .i_mosi(sd_d[1]), // .o_miso(),
+    .i_csn(1'b1), .i_sclk(1'b0), .i_mosi(1'b0), // .o_miso(),
 `endif
     .o_r(osd_vga_r), .o_g(osd_vga_g), .o_b(osd_vga_b),
     .o_hsync(osd_vga_hsync), .o_vsync(osd_vga_vsync), .o_blank(osd_vga_blank)
@@ -690,13 +741,21 @@ module sms
   assign audio_l = aud_l ? c_volume : 0;
   assign audio_r = audio_l;
 `else
-  assign gpio[18] = aud_l;
-  assign gpio[19] = aud_r;
+  //assign gpio[18] = aud_l;
+  //assign gpio[19] = aud_r;
 `endif
 
   // ===============================================================
   // Diagnostic LCD 
   // ===============================================================
+  reg [7:0] rom0, rom1;
+
+  always @(posedge cpuClock) if (oldClockEnable && !cpuClockEnable) begin
+    if (sdramAddress == 0) rom0 <= romOut;
+    else if (sdramAddress == 1) rom1 <= romOut;
+    //if (!load_done && loader_write > 0 && loader_addr == 0) rom0 <= loader_data;
+    //else if (!load_done && loader_write > 0 && loader_addr == 1) rom1 <= loader_data;
+  end
 
   generate
   if(c_lcd_hex)
@@ -705,8 +764,9 @@ module sms
   reg [127:0] R_display;
   // HEX decoder does printf("%16X\n%16X\n", R_display[63:0], R_display[127:64]);
   always @(posedge cpuClock)
-    R_display = {r_vdp[0], r_vdp[1], r_vdp[2], r_vdp[3], r_vdp[4], r_vdp[5],
-                 r_vdp[6], r_vdp[7], r_vdp[8], r_vdp[9], r_vdp[10]};
+    //R_display <= {r_vdp[0], r_vdp[1], r_vdp[2], r_vdp[3], r_vdp[4], r_vdp[5],
+    //              r_vdp[6], r_vdp[7], r_vdp[8], r_vdp[9], r_vdp[10]};
+    R_display <= {rom1, rom0, romOut, sdramAddress, pc};
 
   parameter C_color_bits = 16;
   wire [7:0] x;
@@ -749,28 +809,43 @@ module sms
   lcd_video_inst
   (
     .clk(clk_hdmi),
+`ifdef ulx3s
     .reset(R_btn_joy[5]),
+`else
+    .reset(R_btn_joy[2]),
+`endif
     .x(x),
     .y(y),
     .next_pixel(next_pixel),
     .color(R_color),
+`ifdef ulx3s
     .spi_clk(oled_clk),
     .spi_mosi(oled_mosi),
     .spi_dc(oled_dc),
     .spi_resn(oled_resn),
     .spi_csn(w_oled_csn)
+`else
+    .spi_clk(gpio[11]),
+    .spi_mosi(gpio[10]),
+    .spi_dc(gpio[25]),
+    .spi_resn(gpio[27]),
+    .spi_csn(gpio[8])
+`endif
   );
   //assign oled_csn = w_oled_csn; // 8-pin ST7789: oled_csn is connected to CSn
+`ifdef ulx3s
   assign oled_csn = 1; // 7-pin ST7789: oled_csn is connected to BLK (backlight enable pin)
+`else
+  assign gpio[24] = 1;
+`endif
   end
   endgenerate
 
   // ===============================================================
   // Leds
   // ===============================================================
-  //assign led = {reset, 2'b0, load_done};
+  assign led = {reset, loader_write > 0, 1'b0, load_done};
 
-  always @(posedge cpuClock) if (flash_loader_addr == 1 && flash_loader_data_ready) led <= flash_loader_data_out << 2;
-  always @(posedge cpuClock) diag16 <= {r_vdp[0], r_vdp[1]};
+  always @(posedge cpuClock) diag16 <= pc;
 
 endmodule
