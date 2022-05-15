@@ -333,6 +333,7 @@ module sms
   reg [21:0] loader_addr;
   reg [7:0] loader_data;
   reg oldClockEnable;
+  reg loader_cnt;
 
   always @(posedge cpuClock) begin
     oldClockEnable <= cpuClockEnable;
@@ -341,8 +342,13 @@ module sms
       loader_addr <= flash_loader_addr;
       loader_data <= flash_loader_data_out;
     end
-    if (cpuClockEnable && loader_write == 1) loader_write <= 2; // Write started
-    if (oldClockEnable && !cpuClockEnable && loader_write == 2) loader_write <= 0; // Write complete
+    // Wait for SDRAM B cycle to start
+    if (!cpuClockEnable && oldClockEnable && loader_write == 1) begin
+      loader_write <= 2; // Write started
+      loader_cnt <= 1;
+    end
+    if (loader_write == 2 && loader_cnt > 0) loader_cnt <= loader_cnt - 1;
+    if (loader_write == 2 && loader_cnt == 0) loader_write <= 0; // Write complete
   end
 
   generate
@@ -446,14 +452,14 @@ module sms
    // cpu/chipset interface
    .weA(0),
    .addrA(sdramAddress),
-   .oeA(load_done & cpuClockEnable),
+   .oeA(cpuClockEnable),
    .dinA(0),
    .doutA(romOut),
    // SPI interface
    //.weB(spi_ram_wr && spi_ram_addr[31:24] == 8'h00),
    //.addrB(spi_ram_addr[23:0]),
    //.dinB(spi_ram_di),
-   .weB(!load_done && loader_write > 0 && cpuClockEnable),
+   .weB(!load_done && loader_write > 0),
    .addrB(loader_addr),
    .dinB(loader_data),
    .oeB(0),
@@ -702,9 +708,9 @@ module sms
   
   always @(posedge cpuClock) begin
     cpuClockEnable1 <= cpuClockEnable;
-    if(cpuClockCount == 6) // divide by 7: 25MHz/7 = 3.571MHz
-      cpuClockCount <= 0;
-    else
+    //if(cpuClockCount == 6) // divide by 7: 25MHz/7 = 3.571MHz
+    //  cpuClockCount <= 0;
+    //else
       cpuClockCount <= cpuClockCount + 1;
   end
 
@@ -750,7 +756,7 @@ module sms
   // ===============================================================
   reg [7:0] rom0, rom1;
 
-  always @(posedge cpuClock) if (oldClockEnable && !cpuClockEnable) begin
+  always @(posedge cpuClock) begin
     if (sdramAddress == 0) rom0 <= romOut;
     else if (sdramAddress == 1) rom1 <= romOut;
     //if (!load_done && loader_write > 0 && loader_addr == 0) rom0 <= loader_data;
