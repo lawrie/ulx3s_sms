@@ -80,7 +80,7 @@ module sms
 
 `ifdef ulx4m
   //Gpio
-  output [27:0] gpio,
+  inout [27:0] gpio,
 `endif
   
   // Leds
@@ -93,9 +93,29 @@ module sms
 );
 
 `ifdef ulx4m
-  assign sd_d[2:1] = 4'bzz;
+  assign sd_d[2:1] = 2'bzz;
   assign sd_clk = 1'bz;
   assign sd_cmd = 1'bz;
+  wire btn_left, btn_right, btn_up, btn_down, btn_select, btn_start;
+  wire audio;
+  wire oled_clk, oled_mosi, oled_resn, oled_dc, oled_csn, oled_blt;
+
+  ;
+  IB ib3  (.I(gpio[3]),  .O(btn_left));
+  IB ib5  (.I(gpio[5]),  .O(btn_up));
+  IB ib6  (.I(gpio[6]),  .O(btn_down));
+  IB ib13 (.I(gpio[13]), .O(btn_right));
+  IB ib14 (.I(gpio[14]), .O(btn_select));
+  IB ib23 (.I(gpio[23]), .O(btn_start));
+
+  OB ob18 (.I(audio), .O(gpio[18]));
+
+  OB ob27 (.I(oled_resn), .O(gpio[27]));
+  OB ob10 (.I(oled_mosi), .O(gpio[10]));
+  OB ob11 (.I(oled_clk),  .O(gpio[11]));
+  OB ob24 (.I(oled_blt),  .O(gpio[24]));
+  OB ob25 (.I(oled_dc),   .O(gpio[25]));
+  OB ob8  (.I(oled_csn),  .O(gpio[8]));
 `endif
 
   // prevent crosstalk at flash unused lines
@@ -256,11 +276,15 @@ module sms
   // ===============================================================
   reg joypad2 = 0;
   reg [6:0] R_btn_joy;
+  reg [2:1] R_btn;
   always @(posedge cpuClock)
 `ifdef ulx3s
     R_btn_joy <= btn;
 `else
-    R_btn_joy <= {4'b0, btn, 1'b1};
+    begin
+      R_btn_joy <= {~btn_right, ~btn_left, ~btn_down, ~btn_up, ~btn_select, ~btn_start, 1'b1};
+      R_btn <= btn;
+    end
 `endif
 
   // ===============================================================
@@ -747,22 +771,12 @@ module sms
   assign audio_l = aud_l ? c_volume : 0;
   assign audio_r = audio_l;
 `else
-  //assign gpio[18] = aud_l;
-  //assign gpio[19] = aud_r;
+  assign audio = aud_l | aud_r;
 `endif
 
   // ===============================================================
   // Diagnostic LCD 
   // ===============================================================
-  reg [7:0] rom0, rom1;
-
-  always @(posedge cpuClock) begin
-    if (sdramAddress == 0) rom0 <= romOut;
-    else if (sdramAddress == 1) rom1 <= romOut;
-    //if (!load_done && loader_write > 0 && loader_addr == 0) rom0 <= loader_data;
-    //else if (!load_done && loader_write > 0 && loader_addr == 1) rom1 <= loader_data;
-  end
-
   generate
   if(c_lcd_hex)
   begin
@@ -772,7 +786,7 @@ module sms
   always @(posedge cpuClock)
     //R_display <= {r_vdp[0], r_vdp[1], r_vdp[2], r_vdp[3], r_vdp[4], r_vdp[5],
     //              r_vdp[6], r_vdp[7], r_vdp[8], r_vdp[9], r_vdp[10]};
-    R_display <= {rom1, rom0, romOut, sdramAddress, pc};
+    R_display <= {{1'b1, R_btn_joy}, 16'b0, romOut, sdramAddress, pc};
 
   parameter C_color_bits = 16;
   wire [7:0] x;
@@ -818,31 +832,27 @@ module sms
 `ifdef ulx3s
     .reset(R_btn_joy[5]),
 `else
-    .reset(R_btn_joy[2]),
+    .reset(R_btn[2]),
 `endif
     .x(x),
     .y(y),
     .next_pixel(next_pixel),
     .color(R_color),
-`ifdef ulx3s
     .spi_clk(oled_clk),
     .spi_mosi(oled_mosi),
     .spi_dc(oled_dc),
     .spi_resn(oled_resn),
+`ifdef ulx3s
     .spi_csn(w_oled_csn)
 `else
-    .spi_clk(gpio[11]),
-    .spi_mosi(gpio[10]),
-    .spi_dc(gpio[25]),
-    .spi_resn(gpio[27]),
-    .spi_csn(gpio[8])
+    .spi_csn(oled_csn)
 `endif
   );
   //assign oled_csn = w_oled_csn; // 8-pin ST7789: oled_csn is connected to CSn
 `ifdef ulx3s
   assign oled_csn = 1; // 7-pin ST7789: oled_csn is connected to BLK (backlight enable pin)
 `else
-  assign gpio[24] = 1;
+  assign oled_blt = 1;
 `endif
   end
   endgenerate
@@ -850,7 +860,7 @@ module sms
   // ===============================================================
   // Leds
   // ===============================================================
-  assign led = {reset, loader_write > 0, 1'b0, load_done};
+  assign led = {reset, 1'b0, 1'b1, load_done};
 
   always @(posedge cpuClock) diag16 <= pc;
 
