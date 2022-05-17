@@ -97,7 +97,7 @@ module sms
   assign sd_d[2:1] = 2'bzz;
   assign sd_clk = 1'bz;
   assign sd_cmd = 1'bz;
-  wire btn_left, btn_right, btn_up, btn_down, btn_select, btn_start;
+  wire btn_left, btn_right, btn_up, btn_down, btn_select, btn_select2, btn_start, btn_a;
   wire audio;
   wire oled_clk, oled_mosi, oled_resn, oled_dc, oled_csn, oled_blt;
 
@@ -106,20 +106,20 @@ module sms
     if (c_game_hat) begin
       IB ib13 (.I(gpio[13]), .O(btn_left));
       IB ib19 (.I(gpio[19]), .O(btn_right));
+      IB ib23 (.I(gpio[23]), .O(btn_start));
+      IB ib18 (.I(gpio[18]), .O(btn_select));
+      IB ib4  (.I(gpio[4]),  .O(btn_select2));
+      IB ib26 (.I(gpio[26]),  .O(btn_a));
     end else begin
       IB ib3  (.I(gpio[3]),  .O(btn_left));
       IB ib13 (.I(gpio[13]), .O(btn_right));
+      IB ib14 (.I(gpio[14]), .O(btn_select));
+      OB ob18 (.I(audio), .O(gpio[18]));
     end
   endgenerate 
 
   IB ib5  (.I(gpio[5]),  .O(btn_up));
   IB ib6  (.I(gpio[6]),  .O(btn_down));
-
-  // Shoulder keys are used for start and select
-  IB ib14 (.I(gpio[14]), .O(btn_select));
-  IB ib23 (.I(gpio[23]), .O(btn_start));
-
-  OB ob18 (.I(audio), .O(gpio[18]));
 
   // LCD diagnostic pins
   OB ob27 (.I(oled_resn), .O(gpio[27]));
@@ -294,7 +294,7 @@ module sms
     R_btn_joy <= btn;
 `else
     begin
-      R_btn_joy <= {~btn_right, ~btn_left, ~btn_down, ~btn_up, ~btn_select, ~btn_start, 1'b1};
+      R_btn_joy <= {~btn_right, ~btn_left, ~btn_down, ~btn_up, ~btn_select | ~btn_select2, ~btn_start | ~btn_a, 1'b1};
       R_btn <= btn;
     end
 `endif
@@ -783,7 +783,11 @@ module sms
   assign audio_l = aud_l ? c_volume : 0;
   assign audio_r = audio_l;
 `else
-  assign audio = aud_l | aud_r;
+  generate
+    if (c_game_hat == 0) begin
+      assign audio = aud_l | aud_r;
+    end
+  endgenerate  
 `endif
 
   // ===============================================================
