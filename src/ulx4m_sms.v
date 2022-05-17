@@ -6,6 +6,7 @@ module sms
   parameter c_lcd_hex      = 1, // SPI LCD HEX decoder
   parameter C_flash_loader = 1, // fujprog -j flash -f 0x200000 100in1.img
   parameter C_esp32_loader = 0, // Needs import osd on ESP32 
+  parameter c_game_hat     = 1, // Use Game Hat rather than GamePi15 for controls
   parameter c_diag         = 0, // 0: No led diagnostcs, 1: led diagnostics 
   parameter c_volume       = 4  // Sound volume 0 - 15
 )
@@ -50,7 +51,7 @@ module sms
   input         wifi_gpio5,
   output        wifi_gpio0,
  `endif
- 
+
   inout  sd_clk, sd_cmd,
   inout   [3:0] sd_d,
 
@@ -101,15 +102,26 @@ module sms
   wire oled_clk, oled_mosi, oled_resn, oled_dc, oled_csn, oled_blt;
 
   ;
-  IB ib3  (.I(gpio[3]),  .O(btn_left));
+  generate
+    if (c_game_hat) begin
+      IB ib13 (.I(gpio[13]), .O(btn_left));
+      IB ib19 (.I(gpio[19]), .O(btn_right));
+    end else begin
+      IB ib3  (.I(gpio[3]),  .O(btn_left));
+      IB ib13 (.I(gpio[13]), .O(btn_right));
+    end
+  endgenerate 
+
   IB ib5  (.I(gpio[5]),  .O(btn_up));
   IB ib6  (.I(gpio[6]),  .O(btn_down));
-  IB ib13 (.I(gpio[13]), .O(btn_right));
+
+  // Shoulder keys are used for start and select
   IB ib14 (.I(gpio[14]), .O(btn_select));
   IB ib23 (.I(gpio[23]), .O(btn_start));
 
   OB ob18 (.I(audio), .O(gpio[18]));
 
+  // LCD diagnostic pins
   OB ob27 (.I(oled_resn), .O(gpio[27]));
   OB ob10 (.I(oled_mosi), .O(gpio[10]));
   OB ob11 (.I(oled_clk),  .O(gpio[11]));
@@ -351,7 +363,7 @@ module sms
 
   wire load_done;
   wire  [7:0] flash_loader_data_out;
-  wire [21:0] flash_loader_addr;
+  wire [19:0] flash_loader_addr;
   wire flash_loader_data_ready;
   reg [1:0] loader_write = 0;
   reg [21:0] loader_addr;

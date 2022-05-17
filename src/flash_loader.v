@@ -16,7 +16,7 @@ module flash_loader
   output flash_sck,
   output flash_mosi,
   input  flash_miso,
-  output reg [21:0] load_addr,
+  output reg [19:0] load_addr,
   output [7:0] load_write_data,
   output data_valid,
   input valid,
@@ -36,35 +36,27 @@ wire flashmem_ready;
 assign data_valid = flashmem_ready;
 wire [23:0] flashmem_addr = (FLASH_BEGIN_ADDR + (index_lat << 18)) | {load_addr};
 reg [3:0] index_lat;
-reg load_done_pre;
 
 // Flash memory load interface
 always @(posedge clock) 
 begin
   if (reset == 1'b1) begin
-    load_done_pre <= 1'b0;
     load_done <= 1'b0;
     load_addr <= 0;
     index_lat <= 4'h0;
   end else begin
     if (reload == 1'b1) begin
-      load_done_pre <= 1'b0;
       load_done <= 1'b0;
       load_addr <= 0;
       index_lat <= index;
     end else begin
-      if(!load_done_pre) begin
+      if(!load_done) begin
         if (flashmem_ready == 1'b1) begin
           if (load_addr[$bits(load_addr)-1]) begin
-            load_done_pre <= 1'b1;
+            load_done <= 1'b1;
           end else 
             load_addr <= load_addr + 1;
         end
-      end else begin
-        if (load_addr[9] == 0)
-          load_addr <= load_addr + 1;
-        else
-          load_done <= 1'b1;
       end
     end
   end
