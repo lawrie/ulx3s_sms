@@ -62,7 +62,7 @@ Not all games run.
 These are some of the games that seem to have problems:
 
 - Asterix - hangs
-- Babu Baku Animal - does not respond to start button
+- Baku Baku Animal - does not respond to start button
 - Chop Lifter - hangs
 - Dracula - screen corruption
 - Fantastic Dizzy - Software Error
