@@ -49,13 +49,30 @@ The python files from esp32/osd should be uploaded to the ESP32.
 
 ## Bugs
 
-Only 31 (not 64) sprites are currently supported.
-
 Audio needs improving.
 
 Only joypad 1 is supported and seems to have some problems.
+
+There is a vertical colored bar down the left of some games.
 
 Various edge cases in the VDP are not correct.
 
 Not all games run.
 
+These are some of the games that seem to have problems:
+
+- Asterix - hangs
+- Babu Baku Animal - does not respond to start button
+- Chop Lifter - hangs
+- Dracula - screen corruption
+- Fantastic Dizzy - Software Error
+- Jungle Book - screen corruption
+- Lemmings - screen corruption
+- Lion King - crashes
+- Miracle World - hangs
+- Ms Pacman - hangs
+- Outrun - screen corruption
+- Space Harrier - hangs
+- Spell Caster - hangs
+- Wanted - screen corruption
+- Zaxxon 3D - screen corruption
